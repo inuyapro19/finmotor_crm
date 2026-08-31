@@ -1,0 +1,89 @@
+@import "tailwindcss";
+
+/* ═══════════════════════════════════════════════════════════════════
+   FINMOTOR CRM — tema de automotoras
+   Alineado al Manual de Marca y al backoffice:
+   Estructura: Azul Marino #071D56 · Acción: Verde #387D09
+   Acento: Verde Lima #B3FF00 · Fondo: Blanco Hueso #F4F1EA
+   ═══════════════════════════════════════════════════════════════════ */
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-navy: var(--fm-navy);
+  --color-lime: var(--fm-lime);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --font-sans: var(--font-ui);
+  --font-mono: var(--font-mono-ui);
+}
+
+:root {
+  --radius: 0.75rem;
+
+  --fm-navy: #071d56;
+  --fm-green: #387d09;
+  --fm-green-700: #2b6007;
+  --fm-lime: #b3ff00;
+  --fm-bone: #f4f1ea;
+
+  --background: #f6f4ee;
+  --foreground: #071d56;
+  --card: #ffffff;
+  --card-foreground: #071d56;
+  --primary: #387d09;
+  --primary-foreground: #ffffff;
+  --muted: #ecebe3;
+  --muted-foreground: #5a6070;
+  --accent: #eef6e7;
+  --accent-foreground: #2b6007;
+  --border: #e2e0d6;
+
+  /* Familia de UI. Se usa la pila del sistema para que `npm run dev` no dependa de la
+     descarga de Google Fonts (bloqueada en algunas redes locales — ver el build en VPS del
+     frontend-web). Para alinear tipografía con el resto, basta cambiar esta variable por
+     Poppins vía next/font en `layout.tsx`. */
+  --font-ui: "Poppins", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-mono-ui: ui-monospace, "Cascadia Mono", "Segoe UI Mono", Menlo, monospace;
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  /* Evita el zoom automático de iOS al enfocar inputs: el agente trabaja desde el teléfono. */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Los inputs bajo 16px provocan zoom en iOS Safari. */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
+@media (min-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 14px;
+  }
+}

@@ -1,0 +1,16 @@
+FROM node:22-alpine
+
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3002 \
+    HOSTNAME=0.0.0.0
+
+WORKDIR /app
+
+COPY .next/standalone ./
+COPY .next/static ./.next/static
+COPY public ./public
+
+EXPOSE 3002
+
+CMD ["node", "server.js"]
