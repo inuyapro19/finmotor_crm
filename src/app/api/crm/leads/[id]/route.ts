@@ -38,6 +38,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       lead_sale_not_closed: "Registra el pago antes de marcar la venta como cerrada",
       completed_sale_cannot_reopen: "Una venta completada requiere un proceso formal de reversa",
       lead_already_closed: "La oportunidad ya está cerrada",
+      completed_sale_cannot_be_lost: "El auto ya se transfirió: esta venta no se puede dar por perdida",
+      vehicle_locked_by_purchase: "La venta ya está cerrada: no se puede cambiar la unidad",
+      quote_locked_by_purchase:
+        "El pago ya está registrado y el precio quedó fijado. Para renegociar, marca la oportunidad como perdida y parte una nueva.",
     };
     return NextResponse.json(
       { error: map[String(data?.detail)] || "No pudimos actualizar la solicitud" },
@@ -65,8 +69,11 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (!upstream.ok) {
     const map: Record<string, string> = {
       only_dealership_admin_can_delete: "Sólo el administrador de la automotora puede eliminar solicitudes",
+      lead_linked_to_sourcing: "Esta venta está vinculada a una captación. Conserva la solicitud para mantener su trazabilidad.",
       lead_out_of_scope: "Esta solicitud no es de tu automotora",
       lead_not_found: "La solicitud ya no existe",
+      lead_has_a_sale:
+        "Esta solicitud tiene una venta detrás. Si no se concretó, márcala como perdida: eso anula la venta y devuelve el auto a la vitrina.",
     };
     return NextResponse.json(
       { error: map[String(data?.detail)] || "No pudimos eliminar la solicitud" },

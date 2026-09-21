@@ -24,11 +24,14 @@ export type LeadBoardFilters = {
 };
 
 const SORTS: { key: LeadListSort; label: string }[] = [
+  { key: "priority", label: "Prioridad MIA" },
+  { key: "recent", label: "Más reciente" },
   { key: "urgency", label: "Urgencia" },
   { key: "progress", label: "Avance" },
   { key: "value", label: "Monto" },
-  { key: "recent", label: "Más reciente" },
 ];
+// La bandeja abre ordenada por prioridad del motor (R-PRI-01), no por fecha.
+const DEFAULT_SORT: LeadListSort = "priority";
 const INPUT = "h-10 min-w-0 rounded-lg border border-[var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--primary)]";
 
 export function leadListHref(
@@ -87,7 +90,7 @@ export function LeadsBoard({
             <input
               name="q"
               defaultValue={filters.q}
-              placeholder="Buscar por nombre, teléfono, patente…"
+              placeholder="Buscar cliente"
               className="h-10 w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--card)] pl-9 pr-9 text-sm outline-none focus:border-[var(--primary)]"
             />
             {filters.q && (
@@ -127,7 +130,7 @@ export function LeadsBoard({
             <button className="h-10 flex-1 rounded-lg border border-[var(--border)] bg-white px-4 text-sm font-semibold hover:border-[var(--primary)]">
               Aplicar
             </button>
-            {(hasFilters || filters.orden !== "urgency") && (
+            {(hasFilters || filters.orden !== DEFAULT_SORT) && (
               <Link href="/solicitudes" className="flex h-10 items-center rounded-lg border border-[var(--border)] bg-white px-3 text-sm">
                 Limpiar
               </Link>
@@ -168,7 +171,7 @@ export function LeadsBoard({
             count={stageTotal || summary.scopeTotal}
             active={!filters.estado}
           />
-          {STAGES.map((stage) => (
+          {STAGES.filter((stage) => stage.key !== "won").map((stage) => (
             <StageChip
               key={stage.key}
               href={leadListHref(filters, { estado: filters.estado === stage.key ? undefined : stage.key })}

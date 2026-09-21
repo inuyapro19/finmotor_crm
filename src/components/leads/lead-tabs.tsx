@@ -45,10 +45,10 @@ export function LeadTabs({ tabs, initialKey }: { tabs: LeadTab[]; initialKey?: s
               id={`tab-${tab.key}`}
               onClick={() => setActive(tab.key)}
               className={clsx(
-                "flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm transition-colors",
+                "flex shrink-0 items-center gap-1.5 rounded-t-lg border-b-2 px-3.5 py-2.5 text-sm transition-colors",
                 selected
-                  ? "border-[var(--primary)] font-semibold text-[var(--foreground)]"
-                  : "border-transparent font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)]",
+                  ? "border-[var(--primary)] bg-[var(--accent)] font-semibold text-[var(--primary)]"
+                  : "border-transparent font-medium text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)]",
               )}
             >
               {tab.label}
@@ -57,7 +57,7 @@ export function LeadTabs({ tabs, initialKey }: { tabs: LeadTab[]; initialKey?: s
                   className={clsx(
                     "rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums",
                     selected
-                      ? "bg-[var(--accent)] text-[var(--accent-foreground)]"
+                      ? "bg-[var(--primary)] text-white"
                       : "bg-[var(--muted)] text-[var(--muted-foreground)]",
                   )}
                 >

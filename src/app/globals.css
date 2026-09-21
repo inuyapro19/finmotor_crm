@@ -2,9 +2,10 @@
 
 /* ═══════════════════════════════════════════════════════════════════
    FINMOTOR CRM — tema de automotoras
-   Alineado al Manual de Marca y al backoffice:
+   Alineado al Manual de Marca y Kit UI/UX (v1.0 · 2026) y al backoffice:
    Estructura: Azul Marino #071D56 · Acción: Verde #387D09
    Acento: Verde Lima #B3FF00 · Fondo: Blanco Hueso #F4F1EA
+   Tipografía: Poppins (única familia de interfaz) + Geist Mono para cifras
    ═══════════════════════════════════════════════════════════════════ */
 
 @theme inline {
@@ -24,8 +25,14 @@
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
-  --font-sans: var(--font-ui);
-  --font-mono: var(--font-mono-ui);
+  /* Poppins real, cargada por next/font en `layout.tsx` (variable --font-poppins, self-hosted:
+     no depende en runtime de una red que pueda bloquear Google Fonts). IMPORTANTE: sólo se
+     resuelve bien cuando se consume vía la utilidad Tailwind `font-sans`/`font-mono` (como en
+     <body>, ver layout.tsx) — un `font-family: var(--font-sans)` en una regla CSS suelta fuera
+     de una utilidad queda sin resolver con `@theme inline` + next/font. Costó detectarlo:
+     `--font-sans` se veía bien en el bundle compilado pero getComputedStyle lo daba vacío. */
+  --font-sans: var(--font-poppins), "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "Cascadia Mono", "Segoe UI Mono", Menlo, monospace;
 }
 
 :root {
@@ -37,7 +44,7 @@
   --fm-lime: #b3ff00;
   --fm-bone: #f4f1ea;
 
-  --background: #f6f4ee;
+  --background: #f4f1ea;
   --foreground: #071d56;
   --card: #ffffff;
   --card-foreground: #071d56;
@@ -48,13 +55,6 @@
   --accent: #eef6e7;
   --accent-foreground: #2b6007;
   --border: #e2e0d6;
-
-  /* Familia de UI. Se usa la pila del sistema para que `npm run dev` no dependa de la
-     descarga de Google Fonts (bloqueada en algunas redes locales — ver el build en VPS del
-     frontend-web). Para alinear tipografía con el resto, basta cambiar esta variable por
-     Poppins vía next/font en `layout.tsx`. */
-  --font-ui: "Poppins", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
-  --font-mono-ui: ui-monospace, "Cascadia Mono", "Segoe UI Mono", Menlo, monospace;
 }
 
 * {
@@ -66,11 +66,20 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
+/* La tipografía la fija la clase utilitaria `font-sans` en <body> (layout.tsx) — ver la nota
+   junto a `--font-sans` en `@theme inline` arriba. */
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
+}
+
+/* Manual de Marca (05 · Tipografía): Display/Headings van en Poppins Bold/Semibold con
+   tracking -0.3px; Body queda en tracking 0 (el valor por defecto, no se toca). */
+h1,
+h2,
+h3 {
+  letter-spacing: -0.3px;
 }
 
 /* Los inputs bajo 16px provocan zoom en iOS Safari. */

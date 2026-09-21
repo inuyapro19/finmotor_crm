@@ -18,18 +18,19 @@ import {
 import { Pill } from "@/components/ui/primitives";
 import { fmtCLP, fmtDateTime, timeAgo } from "@/lib/format";
 import {
+  SALES_PATH,
   SLA_LABEL,
   isActionOverdue,
   leadValue,
   slaLevel,
   sourceLabel,
   stageLabel,
+  stageStep,
   type Lead,
   type LeadStage,
 } from "@/lib/leads";
 
 
-const SALES_PATH: LeadStage[] = ["new", "contacted", "visit", "quoted", "financing", "documents", "won"];
 const SLA_VARIANT = { ok: "success", warn: "warn", late: "danger" } as const;
 
 const SOURCE_STYLE: Record<string, { icon: React.ComponentType<{ className?: string }>; tone: string }> = {
@@ -47,6 +48,39 @@ const SOURCE_STYLE: Record<string, { icon: React.ComponentType<{ className?: str
   manual: { icon: UserPlus, tone: "border-slate-200 bg-slate-50 text-slate-700" },
 };
 
+/**
+ * OPS del motor MIA-CRM: margen esperado por dia. Es el numero que explica por que este
+ * lead esta donde esta en la cola (R-PRI-01) -- ordenar sin mostrarlo dejaria al vendedor
+ * obedeciendo un orden que no puede cuestionar.
+ *
+ * Un OPS `provisional` descansa en un margen estimado, no en el costo real de adquisicion:
+ * se marca distinto para no darle la misma certeza que a uno validado (R-PRI-02).
+ */
+function OpportunityScore({ lead }: { lead: Lead }) {
+  if (lead.opportunityScore === null) return null;
+  const provisional = lead.opportunityConfidence === "provisional";
+  return (
+    <span
+      title={
+        provisional
+          ? "Prioridad MIA estimada: el margen no viene del costo real de adquisicion"
+          : "Prioridad MIA: margen esperado por dia, con costo real de adquisicion"
+      }
+      className={clsx(
+        "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
+        provisional
+          ? "bg-amber-50 text-amber-700"
+          : "bg-[var(--fm-lime)]/20 text-[var(--fm-navy)]",
+      )}
+    >
+      <Sparkles className="h-3 w-3" />
+      {fmtCLP(lead.opportunityScore)}/dia
+      {provisional && <span className="font-normal">est.</span>}
+    </span>
+  );
+}
+
+
 export function LeadExecutiveRow({ lead, showAssignee }: { lead: Lead; showAssignee: boolean }) {
   const value = leadValue(lead);
   const contacted = Boolean(lead.firstContactedAt) || !["new", "lost"].includes(lead.stage);
@@ -61,6 +95,7 @@ export function LeadExecutiveRow({ lead, showAssignee }: { lead: Lead; showAssig
             <span className="truncate text-sm font-semibold text-[var(--fm-navy)]">{lead.contactName}</span>
             {lead.priority > 0 && <Pill variant="warn">Prioridad</Pill>}
           </div>
+          <div className="mt-1"><OpportunityScore lead={lead} /></div>
           <p className="mt-1 truncate text-[11px] text-[var(--muted-foreground)]">
             {lead.contactPhone || lead.contactEmail || "Sin teléfono ni correo"}
           </p>
@@ -144,24 +179,50 @@ function SourceBadge({ source }: { source: string | null }) {
   );
 }
 
+/**
+ * El mismo camino que muestra el stepper de la ficha, con el mismo denominador. Antes esta
+ * tabla tenía su propia lista con `won` adentro: decía "Paso 4 de 7" para un lead que al
+ * abrirlo aparecía 4 de 6, y pintaba las seis barras en rojo cuando se perdía — como si el
+ * cliente hubiera recorrido todo el camino antes de caerse.
+ */
 function StageProgress({ stage }: { stage: LeadStage }) {
-  const lost = stage === "lost";
-  const index = lost ? 0 : Math.max(0, SALES_PATH.indexOf(stage));
+  const step = stageStep(stage);
+  const closed = step === null;
+  const won = stage === "won";
   return (
     <div className="min-w-[170px]">
       <div className="flex items-center justify-between gap-2">
-        <span className={clsx("text-xs font-semibold", lost ? "text-red-700" : stage === "won" ? "text-emerald-700" : "text-[var(--fm-navy)]")}>{stageLabel(stage)}</span>
-        <span className="text-[9px] font-medium uppercase tracking-wide text-[var(--muted-foreground)]">{lost ? "Cerrado" : `Paso ${index + 1} de ${SALES_PATH.length}`}</span>
+        <span className={clsx("text-xs font-semibold", stage === "lost" ? "text-red-700" : won ? "text-emerald-700" : "text-[var(--fm-navy)]")}>{stageLabel(stage)}</span>
+        <span className="text-[9px] font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
+          {step ? `Paso ${step.index + 1} de ${step.total}` : won ? "Cerrada" : "Sin cerrar"}
+        </span>
       </div>
-      <div className="mt-2 grid grid-cols-7 gap-1">
+      <div className="mt-2 grid grid-cols-6 gap-1">
         {SALES_PATH.map((item, itemIndex) => (
-          <span key={item} className={clsx("h-1 rounded-full", lost ? "bg-red-200" : itemIndex <= index ? stage === "won" ? "bg-emerald-500" : "bg-[var(--primary)]" : "bg-[var(--border)]")} />
+          <span
+            key={item.key}
+            className={clsx(
+              "h-1 rounded-full",
+              won
+                ? "bg-emerald-500"
+                : closed
+                  ? "bg-[var(--border)]"
+                  : itemIndex <= step.index
+                    ? "bg-[var(--primary)]"
+                    : "bg-[var(--border)]",
+            )}
+          />
         ))}
       </div>
     </div>
   );
 }
 
+/**
+ * La columna se llama "Próximo paso" y decía la hora, nunca el paso: todo lead agendado
+ * aparecía como "Gestión agendada" y había que abrirlo para saber qué se prometió — que es
+ * justo lo que el panel "Próximo paso" de la ficha muestra desde la misma tarea.
+ */
 function NextAction({ lead, overdue }: { lead: Lead; overdue: boolean }) {
   if (lead.stage === "won") return <p className="text-xs font-semibold text-emerald-700">Venta cerrada</p>;
   if (lead.stage === "lost") return <p className="max-w-[170px] truncate text-xs font-medium text-red-700">{lead.lostReason || "Oportunidad perdida"}</p>;
@@ -169,9 +230,14 @@ function NextAction({ lead, overdue }: { lead: Lead; overdue: boolean }) {
   return (
     <div className={clsx("flex items-start gap-1.5", overdue ? "text-red-700" : "text-[var(--foreground)]")}>
       <CalendarClock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-      <div>
-        <p className="text-xs font-semibold">{overdue ? "Compromiso vencido" : "Gestión agendada"}</p>
-        <p className="mt-0.5 text-[10px]">{fmtDateTime(lead.nextActionAt)}</p>
+      <div className="min-w-0">
+        <p className="max-w-[150px] truncate text-xs font-semibold" title={lead.nextActionTitle ?? undefined}>
+          {lead.nextActionTitle ?? (overdue ? "Compromiso vencido" : "Gestión agendada")}
+        </p>
+        <p className="mt-0.5 text-[10px]">
+          {fmtDateTime(lead.nextActionAt)}
+          {lead.nextActionTitle && overdue ? " · vencido" : ""}
+        </p>
       </div>
     </div>
   );

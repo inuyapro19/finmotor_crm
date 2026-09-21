@@ -52,7 +52,9 @@ export function AgentBoard({ agents }: { agents: AgentPerformance[] }) {
               <th className="px-3 py-2.5 text-right font-medium">Vendidos</th>
               <th className="px-3 py-2.5 text-right font-medium">Conversión</th>
               <th className="px-3 py-2.5 text-right font-medium">1ª respuesta</th>
-              <th className="px-4 py-2.5 text-right font-medium">Vendido</th>
+              {/* "Vendidos" son unidades y esta columna son pesos: con los dos titulados
+                  "Vendido" no habia forma de saber cual era cual. */}
+              <th className="px-4 py-2.5 text-right font-medium">Monto vendido</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border)]">

@@ -6,20 +6,22 @@
  * convierte en una barra lateral. La navegación se recorta según el rol del negocio.
  *
  * En escritorio los destinos NO van en una lista plana: se agrupan por el momento del
- * trabajo (Operación → Inventario → Administración) con un rótulo por grupo, para que el
- * agente ubique dónde está trabajando sin releer todos los ítems cada vez.
+ * trabajo (Dashboard suelto arriba, luego ERP → CRM → Kit de compra venta → Administración)
+ * con un rótulo por grupo, para que el agente ubique dónde está trabajando sin releer todos
+ * los ítems cada vez. Todos los grupos conviven en la misma barra lateral, siempre visibles:
+ * no hay un botón que cambie de "espacio", solo la separación por rótulo.
  *
  * Tres zonas fijas, cada una con un trabajo distinto:
  *   barra lateral → a dónde voy          (navy, jerarquía de módulos)
  *   cabecera      → dónde estoy y quién soy (título de sección, avisos, cuenta)
  *   panel derecho → qué está pasando      (bitácora del local, bajo demanda)
  */
-import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { useMemo, useCallback, useSyncExternalStore } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { clsx } from "clsx";
-import { Activity, ArrowLeftRight, ArrowRightLeft, Building2, CalendarCheck2, Car, FileClock, History, Inbox, LayoutGrid, Store, Users } from "lucide-react";
+import { Activity, ArrowRightLeft, BarChart3, Building2, Car, FileClock, History, Inbox, Landmark, LayoutGrid, Store, Users, Wrench } from "lucide-react";
 
 import { CRM_ROLE_LABEL, canManageTeam, isDealershipAdmin, type CrmRole } from "@/lib/auth/roles";
 import {
@@ -45,42 +47,39 @@ type NavGroup = {
 };
 
 /** Destinos que caben en la barra inferior del teléfono (el resto vive en el menú de cuenta). */
-const MOBILE_HREFS = ["/", "/solicitudes", "/vehiculos"];
-/** A dónde manda el botón de intercambio al entrar a cada espacio de trabajo. */
-const CRM_HOME = "/";
-const ERP_HOME = "/vehiculos";
+const MOBILE_HREFS = ["/solicitudes", "/", "/reportes"];
+
+/** Dashboard va suelto, antes de cualquier grupo — es el único ítem sin rótulo encima. */
+const DASHBOARD_ITEM: NavItem = { href: "/", label: "Dashboard", icon: LayoutGrid };
 
 /**
- * Espacio CRM: leads desde el primer contacto hasta la venta. Es lo único que calza con la
- * definición de CRM — captar, gestionar y convertir, con seguimiento y métricas comerciales.
+ * Resto de la navegación, siempre visible junta y en este orden: ERP → CRM → Kit de compra
+ * venta → Administración (esta última solo si el rol puede gestionar equipo).
  */
-function crmGroups(): NavGroup[] {
-  return [
-    {
-      label: "Operación",
-      items: [
-        { href: "/", label: "Mi día", icon: LayoutGrid },
-        { href: "/solicitudes", label: "Solicitudes", icon: Inbox },
-        { href: "/informes", label: "Informe histórico", icon: FileClock },
-        { href: "/informes-precompra", label: "Informe de precompra", icon: CalendarCheck2 },
-        { href: "/transferencias", label: "Transferencias", icon: ArrowRightLeft },
-      ],
-    },
-  ];
-}
-
-/**
- * Espacio ERP: inventario y administración de la automotora. Vive en la MISMA app (mismo
- * dominio, misma sesión) — el botón de la cabecera intercambia qué grupo se ve en la barra
- * lateral, no navega a otro producto ni a la consola del superadmin.
- */
-function erpGroups(role: CrmRole): NavGroup[] {
+function navGroups(role: CrmRole): NavGroup[] {
   const groups: NavGroup[] = [
     {
-      label: "Inventario",
+      label: "ERP",
       items: [
-        { href: "/vehiculos", label: "Vehículos", icon: Car },
+        { href: "/vehiculos", label: "Stock de vehículos", icon: Car },
         { href: "/historial-stock", label: "Historial de stock", icon: History },
+      ],
+    },
+    {
+      label: "CRM",
+      items: [
+        { href: "/solicitudes", label: "Canales de entrada", icon: Inbox },
+        { href: "/captacion", label: "Captación de vehículos", icon: Car },
+        { href: "/reportes", label: "Reportes", icon: BarChart3 },
+      ],
+    },
+    {
+      label: "Kit de compra venta",
+      items: [
+        { href: "/informes", label: "Informe histórico", icon: FileClock },
+        { href: "/informes-precompra", label: "Informe precompra", icon: Wrench },
+        { href: "/creditos", label: "Créditos", icon: Landmark },
+        { href: "/transferencias", label: "Transferencias", icon: ArrowRightLeft },
       ],
     },
   ];
@@ -88,11 +87,11 @@ function erpGroups(role: CrmRole): NavGroup[] {
     groups.push({
       label: "Administración",
       items: [
-        { href: "/equipo", label: "Equipo", icon: Users },
         ...(isDealershipAdmin(role)
           ? [{ href: "/sucursales", label: "Sucursales", icon: Building2 }]
           : []),
-        { href: "/perfil", label: "Perfil", icon: Store },
+        { href: "/equipo", label: "Equipo", icon: Users },
+        { href: "/perfil", label: "Mi perfil", icon: Store },
       ],
     });
   }
@@ -102,6 +101,37 @@ function erpGroups(role: CrmRole): NavGroup[] {
 function isActive(pathname: string, href: string): boolean {
   if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(href + "/");
+}
+
+function NavLink({ item, active }: { item: NavItem; active: boolean }) {
+  return (
+    <Link
+      href={item.href}
+      aria-current={active ? "page" : undefined}
+      className={clsx(
+        "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] transition-colors",
+        active
+          ? "bg-white/10 font-semibold text-white"
+          : "font-medium text-white/55 hover:bg-white/[0.06] hover:text-white",
+      )}
+    >
+      {/* Marca de página activa: una barra lima, no un bloque de color */}
+      <span
+        aria-hidden
+        className={clsx(
+          "absolute -left-3 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-[var(--fm-lime)] transition-opacity",
+          active ? "opacity-100" : "opacity-0",
+        )}
+      />
+      <item.icon
+        className={clsx(
+          "h-[18px] w-[18px] shrink-0 transition-colors",
+          active ? "text-[var(--fm-lime)]" : "text-white/40 group-hover:text-white/80",
+        )}
+      />
+      <span className="truncate">{item.label}</span>
+    </Link>
+  );
 }
 
 export function CrmShell({
@@ -124,17 +154,11 @@ export function CrmShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const crmNav = useMemo(() => crmGroups(), []);
-  const erpNav = useMemo(() => erpGroups(user.role), [user.role]);
-  // El espacio activo lo decide la ruta actual, no una preferencia guardada aparte: si alguien
-  // entra directo a /vehiculos (link, favorito, "atrás"), la barra lateral ya muestra Inventario
-  // en vez de quedar desincronizada con la página que se está viendo.
-  const inErp = useMemo(
-    () => erpNav.some((group) => group.items.some((item) => isActive(pathname, item.href))),
-    [erpNav, pathname],
+  const groups = useMemo(() => navGroups(user.role), [user.role]);
+  const flatNav = useMemo(
+    () => [DASHBOARD_ITEM, ...groups.flatMap((group) => group.items)],
+    [groups],
   );
-  const groups = inErp ? erpNav : crmNav;
-  const flatNav = useMemo(() => [...crmNav, ...erpNav].flatMap((group) => group.items), [crmNav, erpNav]);
   const bottomNav = useMemo(
     () => flatNav.filter((item) => MOBILE_HREFS.includes(item.href)),
     [flatNav],
@@ -157,8 +181,7 @@ export function CrmShell({
       {/* ── Barra lateral (escritorio) ─────────────────────────── */}
       <aside className="sticky top-0 hidden h-dvh flex-col bg-[var(--fm-navy)] lg:flex">
         {/* Marca: la versión lima del logo es la que corresponde sobre el azul marino (la
-            verde se apaga contra ese fondo). El wordmark ya dice "Finmotor", así que sólo
-            se le suma el distintivo del producto. */}
+            verde se apaga contra ese fondo). */}
         <div className="flex items-center gap-2.5 px-5 pb-5 pt-6">
           <Image
             src="/assets/img/finmotor-logo-vector-lime.svg"
@@ -172,52 +195,23 @@ export function CrmShell({
             unoptimized
             className="h-[22px] w-auto"
           />
-          <span className="rounded-md border border-white/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-white/55">
-            {inErp ? "ERP" : "CRM"}
-          </span>
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 pb-4">
+          {/* Dashboard va suelto, fuera de todo grupo: sin rótulo encima, primero en la barra. */}
+          <div className="space-y-1 pb-6">
+            <NavLink item={DASHBOARD_ITEM} active={isActive(pathname, DASHBOARD_ITEM.href)} />
+          </div>
+
           {groups.map((group, index) => (
             <div key={group.label} className={clsx(index > 0 && "mt-6")}>
-              <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/30">
+              <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--fm-lime)]">
                 {group.label}
               </p>
               <div className="space-y-1">
-                {group.items.map((item) => {
-                  const active = isActive(pathname, item.href);
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      aria-current={active ? "page" : undefined}
-                      className={clsx(
-                        "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] transition-colors",
-                        active
-                          ? "bg-white/10 font-semibold text-white"
-                          : "font-medium text-white/55 hover:bg-white/[0.06] hover:text-white",
-                      )}
-                    >
-                      {/* Marca de página activa: una barra lima, no un bloque de color */}
-                      <span
-                        aria-hidden
-                        className={clsx(
-                          "absolute -left-3 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-[var(--fm-lime)] transition-opacity",
-                          active ? "opacity-100" : "opacity-0",
-                        )}
-                      />
-                      <item.icon
-                        className={clsx(
-                          "h-[18px] w-[18px] shrink-0 transition-colors",
-                          active
-                            ? "text-[var(--fm-lime)]"
-                            : "text-white/40 group-hover:text-white/80",
-                        )}
-                      />
-                      <span className="truncate">{item.label}</span>
-                    </Link>
-                  );
-                })}
+                {group.items.map((item) => (
+                  <NavLink key={item.href} item={item} active={isActive(pathname, item.href)} />
+                ))}
               </div>
             </div>
           ))}
@@ -260,20 +254,7 @@ export function CrmShell({
             <p className="truncate text-sm font-semibold leading-tight">
               {current?.label ?? "Finmotor CRM"}
             </p>
-            <p className="truncate text-[11px] text-[var(--muted-foreground)]">
-              {user.dealershipName}
-            </p>
           </div>
-
-          {/* Intercambia qué grupo muestra la barra lateral (CRM ↔ ERP), en la misma app y
-              sesión — ya no navega a un dominio ni una consola distinta. */}
-          <Link
-            href={inErp ? CRM_HOME : ERP_HOME}
-            className="hidden items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border)] px-2.5 py-1.5 text-xs font-medium text-[var(--muted-foreground)] transition-colors hover:border-[var(--primary)] hover:text-[var(--foreground)] sm:flex"
-          >
-            <ArrowLeftRight className="h-3.5 w-3.5" />
-            {inErp ? "CRM" : "ERP"}
-          </Link>
 
           <button
             onClick={toggleRail}

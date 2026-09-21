@@ -15,10 +15,10 @@ import { Check, Loader2, Trophy, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { crmErrorMessage, crmFetch } from "@/lib/api/crm-fetch";
-import { STAGES, type LeadStage } from "@/lib/leads";
+import { SALES_PATH, type LeadStage } from "@/lib/leads";
 
-/** Etapas del camino, sin los cierres. */
-const PATH = STAGES.filter((s) => s.key !== "won" && s.key !== "lost");
+/** Etapas del camino, sin los cierres. Compartido con la bandeja: ver `SALES_PATH`. */
+const PATH = SALES_PATH;
 const CLOSED_PURCHASE_STATUSES = new Set([
   "PAYMENT_CONFIRMED",
   "CONTRACT_SIGNED",

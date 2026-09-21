@@ -15,23 +15,35 @@ import { useRouter } from "next/navigation";
 import { Loader2, Repeat } from "lucide-react";
 import { toast } from "sonner";
 
-import { Notice } from "@/components/ui/primitives";
+import { Notice, Pill } from "@/components/ui/primitives";
 import { crmErrorMessage, crmFetch } from "@/lib/api/crm-fetch";
+import { TRANSFER_PHASE_HINT, transferStatus } from "@/lib/transfers";
 import type { Lead } from "@/lib/leads";
 
-const READY_STATUSES = new Set(["PAYMENT_CONFIRMED", "CONTRACT_SIGNED", "TRANSFER_IN_PROGRESS", "COMPLETED"]);
+/** Estados de `purchases` desde los que el backend del CRM acepta transferir. Debe ser el
+ *  MISMO conjunto que `leads.py::_TRANSFER_READY_STATUSES`: tenía `COMPLETED` de más, así que
+ *  el botón se habilitaba y el backend respondía "el pago todavía no está registrado". */
+const READY_STATUSES = new Set(["PAYMENT_CONFIRMED", "CONTRACT_SIGNED", "TRANSFER_IN_PROGRESS"]);
 
 const MISSING_LABELS: Record<string, string> = {
   contract_missing: "Falta generar el contrato de compraventa",
+  // Los cinco del checklist de transferencia (`documents_service.ensure_document_checklist`).
+  // Faltaban tres y salían como "Falta: document:vehicle_registration".
   "document:buyer_identity": "Falta la cédula del comprador",
+  "document:sales_contract": "Falta el contrato de compraventa",
+  "document:vehicle_registration": "Falta el padrón del vehículo",
+  "document:annotations_certificate": "Falta el certificado de anotaciones vigentes",
+  "document:unpaid_fines_certificate": "Falta el certificado de multas impagas",
   front_buyer_id_url: "Falta la cédula del comprador (frontal)",
   back_buyer_id_url: "Falta la cédula del comprador (reverso)",
   front_seller_id_url: "Falta la cédula del vendedor (frontal)",
   back_seller_id_url: "Falta la cédula del vendedor (reverso)",
+  vehicle_plate_missing: "Falta la patente del vehículo",
   "legal_seller.company_name": "Falta la razón social de la automotora",
   "legal_seller.company_rut": "Falta el RUT de la automotora",
   "legal_seller.rep_name": "Falta el representante legal de la automotora",
   "legal_seller.power_document_url": "Falta el poder notarial de la automotora",
+  purchase_not_ready: "La venta todavía no está lista para transferir",
   commercial_blocker_open: "Hay una revisión pendiente que bloquea la transferencia",
 };
 
@@ -46,10 +58,14 @@ export function TransferAction({ lead, canManageTransfers }: { lead: Lead; canMa
   const [missing, setMissing] = useState<string[]>([]);
 
   if (lead.transferStatus) {
+    const state = transferStatus(lead.transferStatus);
     return (
-      <Notice>
-        Transferencia iniciada — estado <strong>{lead.transferStatus}</strong>.
-      </Notice>
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Pill variant={state.variant}>{state.label}</Pill>
+        </div>
+        <p className="text-xs text-[var(--muted-foreground)]">{TRANSFER_PHASE_HINT[state.phase]}</p>
+      </div>
     );
   }
 
@@ -75,6 +91,9 @@ export function TransferAction({ lead, canManageTransfers }: { lead: Lead; canMa
           toast.error("Faltan requisitos para transferir");
         } else if (data.reason === "credit_pending") {
           toast.error("El crédito todavía no está aprobado");
+        } else if (data.reason === "credit_rejected") {
+          // No es lo mismo que "pendiente": acá no hay nada que esperar.
+          toast.error("La financiera rechazó el crédito y el pie ya está cobrado: falta resolver el saldo");
         } else if (data.reason === "sale_not_closed") {
           toast.error("Primero termina la cotización y registra el pago");
         } else {

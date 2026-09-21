@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { apiFetch } from "@/lib/api/client";
 import { canWrite, requireCrmApiSession } from "@/lib/auth/session";
 import { vehicleError } from "../vehicles/route";
+import { sourcingError } from "@/lib/sourcing";
 
 
 export async function POST(request: Request) {
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
   });
   const data = await upstream.json().catch(() => ({}));
   if (!upstream.ok) {
-    return NextResponse.json({ error: vehicleError(data?.detail) }, { status: upstream.status });
+    return NextResponse.json({ error: String(data?.detail).startsWith("sourcing_") || data?.detail === "trade_in_amount_mismatch" ? sourcingError(data?.detail) : vehicleError(data?.detail) }, { status: upstream.status });
   }
   return NextResponse.json(data);
 }

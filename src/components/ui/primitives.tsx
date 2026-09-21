@@ -38,12 +38,18 @@ export function Panel({
   action,
   children,
   className,
+  titleAttr,
 }: {
   title?: string;
   subtitle?: string;
   action?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
+  /**
+   * Tooltip del titulo. Sirve para dejar rastreable la referencia interna (el modelo del
+   * documento de diseno, el codigo de regla) sin escribirsela en la cara a quien usa el CRM.
+   */
+  titleAttr?: string;
 }) {
   return (
     <section
@@ -55,7 +61,11 @@ export function Panel({
       {(title || action) && (
         <header className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-3">
           <div className="min-w-0">
-            {title && <h2 className="truncate text-sm font-semibold">{title}</h2>}
+            {title && (
+              <h2 className="truncate text-sm font-semibold" title={titleAttr}>
+                {title}
+              </h2>
+            )}
             {subtitle && (
               <p className="truncate text-xs text-[var(--muted-foreground)]">{subtitle}</p>
             )}
@@ -70,7 +80,7 @@ export function Panel({
 
 /* ── Píldora de estado ───────────────────────────────────────────── */
 
-type PillVariant = "neutral" | "success" | "warn" | "danger" | "info";
+export type PillVariant = "neutral" | "success" | "warn" | "danger" | "info";
 
 const PILL_STYLES: Record<PillVariant, string> = {
   neutral: "bg-[var(--muted)] text-[var(--muted-foreground)]",

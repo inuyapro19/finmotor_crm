@@ -17,8 +17,12 @@ type RawSearchParams = Partial<Record<
   string | string[]
 >>;
 
-const SORTS: LeadListSort[] = ["urgency", "progress", "value", "recent"];
-const STAGE_KEYS = new Set<LeadStage>(STAGES.map((stage) => stage.key));
+const SORTS: LeadListSort[] = ["priority", "urgency", "progress", "value", "recent"];
+// R-PRI-01: la cola del vendedor abre por Opportunity Priority Score, no por antigüedad.
+const DEFAULT_SORT: LeadListSort = "priority";
+const STAGE_KEYS = new Set<LeadStage>(
+  STAGES.filter((stage) => stage.key !== "won").map((stage) => stage.key),
+);
 
 function scalar(value: string | string[] | undefined): string | undefined {
   return typeof value === "string" ? value : value?.[0];
@@ -65,7 +69,7 @@ export default async function LeadsPage({
     atraso: ["1", "true"].includes(scalar(raw.atraso) ?? "") ? "1" : undefined,
     origen: cleanIdentifier(scalar(raw.origen)),
     sucursal: locations.some((location) => location.id === rawLocation) ? rawLocation : undefined,
-    orden: SORTS.includes(rawSort as LeadListSort) ? rawSort as LeadListSort : "urgency",
+    orden: SORTS.includes(rawSort as LeadListSort) ? rawSort as LeadListSort : DEFAULT_SORT,
     page: positivePage(scalar(raw.page)),
   };
 
@@ -88,7 +92,7 @@ export default async function LeadsPage({
   return (
     <>
       <PageHeader
-        title="Leads y oportunidades"
+        title="Canales de entrada"
         subtitle={subtitle({
           error: result.error,
           total: result.summary.scopeTotal,

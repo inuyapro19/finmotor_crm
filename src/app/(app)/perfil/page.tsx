@@ -5,6 +5,7 @@ import { getOrganization } from "@/lib/data/crm";
 import { Notice, PageHeader, Panel } from "@/components/ui/primitives";
 import { OrganizationForm } from "@/components/organization/organization-form";
 import { ChannelList } from "@/components/organization/channel-list";
+import { OrganizationLogoUpload } from "@/components/organization/organization-logo-upload";
 
 /**
  * Perfil de la automotora: los datos de la empresa y los canales donde publica.
@@ -34,12 +35,20 @@ export default async function ProfilePage() {
         subtitle="Datos de la empresa y canales donde publicas tu stock."
       />
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <Panel title="Datos de la empresa" subtitle="Se usan en contratos y documentos">
-          <div className="p-4">
-            <OrganizationForm organization={organization} />
-          </div>
-        </Panel>
+      <div className="grid items-start gap-4 xl:grid-cols-2">
+        <div className="space-y-4">
+          <Panel title="Identidad visual" subtitle="Marca que aparece en los documentos operativos">
+            <div className="p-4">
+              <OrganizationLogoUpload organization={organization} />
+            </div>
+          </Panel>
+
+          <Panel title="Datos de la empresa" subtitle="Se usan en contratos y documentos">
+            <div className="p-4">
+              <OrganizationForm organization={organization} />
+            </div>
+          </Panel>
+        </div>
 
         <Panel title="Canales de publicación" subtitle="Dónde se muestra tu stock">
           <ChannelList organizationId={organization.id} channels={organization.channels} />

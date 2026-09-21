@@ -4,6 +4,7 @@ import { ArrowLeft, FileText, Landmark, Repeat, Stethoscope, User } from "lucide
 
 import { canManageTeam, canManageTransfers, canWrite, isDealershipAdmin, requireCrmSession } from "@/lib/auth/session";
 import { getAssignableAgents, getLeadDetail } from "@/lib/data/crm";
+import { getLeadIntelligence } from "@/lib/data/mia-crm";
 import { fmtCLP, fmtDateTime, timeAgo } from "@/lib/format";
 import { SLA_LABEL, isActionOverdue, leadValue, slaLevel, sourceLabel } from "@/lib/leads";
 import { Panel, Pill } from "@/components/ui/primitives";
@@ -18,6 +19,7 @@ import { QuoteCard } from "@/components/leads/quote-card";
 import { CreditPanel } from "@/components/leads/credit-panel";
 import { LeadTasks } from "@/components/leads/lead-tasks";
 import { CloseTab } from "@/components/leads/close-tab";
+import { MiaIntelligenceTab } from "@/components/leads/mia-intelligence-tab";
 
 const SLA_VARIANT = { ok: "success", warn: "warn", late: "danger" } as const;
 
@@ -45,7 +47,7 @@ export default async function LeadDetailPage({
   // y aquí llega como null.
   const detail = await getLeadDetail(id);
   if (!detail) notFound();
-  const { lead, activities, tasks, creditRequests, creditTerms } = detail;
+  const { lead, activities, tasks, vehicleInterests, creditRequests, creditTerms, sale } = detail;
 
   const managesTeam = canManageTeam(session.role);
   const managesTransfers = canManageTransfers(session.dealership.memberRole);
@@ -54,6 +56,7 @@ export default async function LeadDetailPage({
   const editable = canWrite(session.role);
   const value = leadValue(lead);
   const overdue = isActionOverdue(lead);
+  const intelligence = await getLeadIntelligence(lead.id);
 
   return (
     <>
@@ -91,7 +94,7 @@ export default async function LeadDetailPage({
       </div>
 
       {/* ── En qué va la venta ───────────────────────────────────── */}
-      <LeadSummary lead={lead} canWrite={editable} />
+      <LeadSummary lead={lead} sale={sale} canWrite={editable} />
 
       {/* ── Qué se hace con ella ─────────────────────────────────── */}
       <LeadTabs
@@ -167,16 +170,21 @@ export default async function LeadDetailPage({
           },
           {
             key: "cotizacion",
-            label: "Cotización",
-            badge: value !== null ? fmtCLP(value) : undefined,
+            label: "Vehículos y cotización",
+            badge:
+              vehicleInterests.filter((item) => item.status !== "rejected").length > 1
+                ? `${vehicleInterests.filter((item) => item.status !== "rejected").length} unidades`
+                : value !== null
+                  ? fmtCLP(value)
+                  : undefined,
             content: (
               <div className="grid gap-4 lg:grid-cols-2">
                 <Panel
-                  title="Unidad y términos"
-                  subtitle="Qué le estás ofreciendo y por cuánto"
+                  title="Selección de vehículos y términos"
+                  subtitle="Compara varias alternativas, registra sus pruebas y define la unidad final"
                   className="lg:col-span-2"
                 >
-                  <QuoteCard lead={lead} canWrite={editable} />
+                  <QuoteCard lead={lead} vehicleInterests={vehicleInterests} canWrite={editable} />
                 </Panel>
 
                 <Panel title="Servicios que puedes ofrecerle" className="lg:col-span-2">
@@ -217,6 +225,18 @@ export default async function LeadDetailPage({
             ),
           },
           {
+            key: "mia",
+            label: "Inteligencia MIA",
+            content: (
+              <MiaIntelligenceTab
+                leadId={lead.id}
+                vehiclePrice={lead.vehiclePrice}
+                intelligence={intelligence}
+                canWrite={editable}
+              />
+            ),
+          },
+          {
             key: "cierre",
             label: "Cierre",
             badge: lead.purchaseId ? "Venta cerrada" : undefined,
@@ -224,6 +244,7 @@ export default async function LeadDetailPage({
               <CloseTab
                 lead={lead}
                 creditRequests={creditRequests}
+                sale={sale}
                 canWrite={editable}
                 canManageTeam={managesTeam}
                 canManageTransfers={managesTransfers}

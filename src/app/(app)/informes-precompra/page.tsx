@@ -3,12 +3,14 @@ import {
   ArrowLeft,
   ArrowRight,
   CalendarCheck2,
+  Download,
   Search,
   Wrench,
 } from "lucide-react";
 
 import { ReportsStatusPoller } from "@/components/reports/reports-status-poller";
 import { PrepurchaseVisitDialog } from "@/components/reports/prepurchase-visit-dialog";
+import { PrepurchaseResultAction } from "@/components/reports/prepurchase-result-action";
 import { EmptyState, Notice, PageHeader, Panel, Pill, StatCard } from "@/components/ui/primitives";
 import { canWrite, requireCrmSession } from "@/lib/auth/session";
 import { getPrepurchaseReports, type PrepurchaseReport } from "@/lib/data/crm";
@@ -103,6 +105,7 @@ export default async function PrepurchaseReportsPage({
     to: filters.to,
   });
   const summary = result.summary;
+  const writable = canWrite(session.role);
   const isUpdating = result.reports.some((report) =>
     ["checkout_initializing", "processing_payment"].includes(report.status),
   );
@@ -113,7 +116,7 @@ export default async function PrepurchaseReportsPage({
       <PageHeader
         title="Informe de precompra"
         subtitle="Agenda y control de las inspecciones técnicas solicitadas para tus vehículos."
-        action={canWrite(session.role) ? <PrepurchaseVisitDialog /> : undefined}
+        action={writable ? <PrepurchaseVisitDialog /> : undefined}
       />
 
       {result.error ? (
@@ -218,6 +221,7 @@ export default async function PrepurchaseReportsPage({
                     <th className="px-3 py-3">Servicio</th>
                     <th className="px-3 py-3 text-right">Valor</th>
                     <th className="px-4 py-3">Solicitado</th>
+                    <th className="px-4 py-3">Resultado</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border)]">
@@ -245,6 +249,13 @@ export default async function PrepurchaseReportsPage({
                       </td>
                       <td className="px-3 py-3 text-right font-semibold tabular-nums">{fmtCLP(report.priceClp)}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-[var(--muted-foreground)]">{fmtDateTime(report.createdAt)}</td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        {report.resultAvailable ? (
+                          <a href={`/api/crm/reports/${encodeURIComponent(report.id)}/download`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border)] px-2.5 py-2 font-medium text-[var(--primary)]"><Download className="h-3.5 w-3.5" />Descargar</a>
+                        ) : writable && report.status === "paid" ? (
+                          <PrepurchaseResultAction reportId={report.id} plate={report.plate} />
+                        ) : "—"}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -278,6 +289,11 @@ export default async function PrepurchaseReportsPage({
                     <Wrench className="h-3 w-3" />
                     {report.visitStatus ? VISIT_STATUS[report.visitStatus as keyof typeof VISIT_STATUS] ?? report.visitStatus : "Sin agenda"}
                   </Pill>
+                  {report.resultAvailable ? (
+                    <a href={`/api/crm/reports/${encodeURIComponent(report.id)}/download`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border)] px-2.5 py-2 text-xs font-medium text-[var(--primary)]"><Download className="h-3.5 w-3.5" />Descargar resultado</a>
+                  ) : writable && report.status === "paid" ? (
+                    <PrepurchaseResultAction reportId={report.id} plate={report.plate} />
+                  ) : null}
                 </li>
               ))}
             </ul>

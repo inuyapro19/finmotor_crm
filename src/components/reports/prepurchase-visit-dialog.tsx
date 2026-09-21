@@ -21,16 +21,25 @@ function defaultSchedule() {
   return localDateTime(value);
 }
 
-export function PrepurchaseVisitDialog() {
+export function PrepurchaseVisitDialog({
+  initialPlate = "",
+  leadId,
+  compact = false,
+}: {
+  initialPlate?: string;
+  leadId?: string;
+  compact?: boolean;
+} = {}) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [plate, setPlate] = useState("");
+  const [plate, setPlate] = useState(initialPlate);
   const [scheduledFor, setScheduledFor] = useState("");
   const [notes, setNotes] = useState("");
 
   const show = () => {
+    setPlate(initialPlate);
     if (!scheduledFor) setScheduledFor(defaultSchedule());
     setOpen(true);
   };
@@ -56,6 +65,7 @@ export function PrepurchaseVisitDialog() {
           plate: normalizedPlate,
           scheduledFor: date.toISOString(),
           notes: notes.trim() || null,
+          leadId: leadId ?? null,
         }),
       });
       const data = await response.json().catch(() => ({}));
@@ -66,7 +76,7 @@ export function PrepurchaseVisitDialog() {
       const branch = data?.visit?.location?.name;
       toast.success(branch ? `Visita agendada en ${branch}` : "Visita de precompra agendada");
       setOpen(false);
-      setPlate("");
+      setPlate(initialPlate);
       setScheduledFor("");
       setNotes("");
       startTransition(() => router.refresh());
@@ -82,11 +92,16 @@ export function PrepurchaseVisitDialog() {
     <>
       <button
         type="button"
-        onClick={show}
-        className="flex items-center gap-1.5 rounded-[var(--radius-md)] bg-[var(--primary)] px-3.5 py-2 text-sm font-medium text-white"
+        onClick={(event) => {
+          event.stopPropagation();
+          show();
+        }}
+        className={compact
+          ? "inline-flex items-center gap-1 rounded-md border border-[var(--border)] bg-white px-2 py-1.5 text-[11px] font-medium text-[var(--primary)]"
+          : "flex items-center gap-1.5 rounded-[var(--radius-md)] bg-[var(--primary)] px-3.5 py-2 text-sm font-medium text-white"}
       >
         <CalendarPlus className="h-4 w-4" />
-        Agendar visita
+        {compact ? "Precompra" : "Agendar visita"}
       </button>
 
       <FormDialog
@@ -102,7 +117,7 @@ export function PrepurchaseVisitDialog() {
           <MapPin className="h-5 w-5 shrink-0 text-[var(--primary)]" />
           <div>
             <p className="text-xs font-medium">Servicio postpago</p>
-            <p className="text-sm font-semibold">{fmtCLP(59_900)} por inspección</p>
+            <p className="text-sm font-semibold">{fmtCLP(49_990)} por inspección</p>
           </div>
         </div>
 

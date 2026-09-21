@@ -14,6 +14,7 @@ import { toast } from "sonner";
 
 import { crmErrorMessage, crmFetch } from "@/lib/api/crm-fetch";
 import { fmtCLP } from "@/lib/format";
+import type { SaleTerms } from "@/lib/data/crm";
 import type { Lead } from "@/lib/leads";
 
 const METHODS: { key: string; label: string }[] = [
@@ -26,11 +27,11 @@ const PAYMENT_DONE_STATUSES = new Set(["PAYMENT_CONFIRMED", "CONTRACT_SIGNED", "
 
 export function PaymentForm({
   lead,
-  hasFinancingRequest,
+  sale,
   canWrite,
 }: {
   lead: Lead;
-  hasFinancingRequest: boolean;
+  sale: SaleTerms;
   canWrite: boolean;
 }) {
   const router = useRouter();
@@ -39,23 +40,23 @@ export function PaymentForm({
   const [reference, setReference] = useState("");
   const [sending, setSending] = useState(false);
 
-  const price = lead.quotedPrice ?? lead.vehiclePrice ?? 0;
-  const down = lead.quotedDownPayment ?? 0;
-  // Financiado: se cobra el pie (puede ser $0 — venta 100% financiada, nada que cobrar pero
-  // igual hay que "confirmar" la venta). Contado: el precio completo.
-  const expected = hasFinancingRequest ? down : price;
+  // Monto y modalidad los define el servidor, que es el mismo que los valida al recibir el
+  // POST. Calcularlos acá fue el origen de un `amount_mismatch` sin explicación: el frontend
+  // contaba las solicitudes de crédito rechazadas y pedía el pie de una venta al contado.
+  const financed = sale.financed;
+  const expected = sale.amountDueClp;
   const alreadyPaid = lead.purchaseStatus ? PAYMENT_DONE_STATUSES.has(lead.purchaseStatus) : false;
 
   if (alreadyPaid) {
     return (
       <div className="flex items-center gap-2 px-4 py-4 text-sm text-[var(--primary)]">
         <CheckCircle2 className="h-4 w-4 shrink-0" />
-        Pago registrado{hasFinancingRequest ? " (pie)" : ""}.
+        Pago registrado{financed ? " (pie)" : ""}.
       </div>
     );
   }
 
-  if (!hasFinancingRequest && expected <= 0) {
+  if (!financed && expected <= 0) {
     return (
       <p className="px-4 py-4 text-xs text-[var(--muted-foreground)]">
         Falta terminar la cotización (unidad y precio) antes de poder cobrar.
@@ -87,13 +88,13 @@ export function PaymentForm({
     }
   };
 
-  const noDownPayment = hasFinancingRequest && expected <= 0;
+  const noDownPayment = financed && expected <= 0;
 
   return (
     <div className="space-y-4 p-4">
       <div className="flex items-baseline justify-between gap-3 rounded-[var(--radius-md)] bg-[var(--muted)]/40 px-3 py-2.5">
         <span className="text-xs text-[var(--muted-foreground)]">
-          {noDownPayment ? "Venta 100% financiada" : hasFinancingRequest ? "Pie a cobrar" : "Total a cobrar"}
+          {noDownPayment ? "Venta 100% financiada" : financed ? "Pie a cobrar" : "Total a cobrar"}
         </span>
         <span className="text-lg font-semibold tabular-nums">{fmtCLP(expected)}</span>
       </div>

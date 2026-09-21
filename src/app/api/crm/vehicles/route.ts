@@ -6,14 +6,15 @@ import { canWrite, requireCrmApiSession } from "@/lib/auth/session";
  * GET /api/crm/vehicles?q= — buscador del stock para elegir la unidad que se está cotizando.
  *
  * Cualquier agente puede buscar (necesita la unidad para cotizar); el backend ya acota el
- * resultado a las unidades de su automotora. Devuelve lo mínimo para una lista de resultados.
+ * resultado a las unidades de su automotora. Devuelve los datos comerciales necesarios para
+ * comparar unidades sin abandonar la cotización.
  */
 export async function GET(request: Request) {
   const auth = await requireCrmApiSession();
   if (!auth.ok) return auth.response;
 
   const url = new URL(request.url);
-  const params = new URLSearchParams({ page: "1", limit: "10" });
+  const params = new URLSearchParams({ page: "1", limit: "50" });
   const q = url.searchParams.get("q")?.trim();
   if (q) params.set("q", q);
   const status = url.searchParams.get("status")?.trim();
@@ -30,9 +31,20 @@ export async function GET(request: Request) {
     year: number | null;
     patent: string | null;
     price: number | string | null;
+    mileage: number | null;
     status: string | null;
+    stock_number: number | null;
     brand_label: string | null;
     model_label: string | null;
+    vehicle_type: string | null;
+    fuel_type: string | null;
+    transmission: string | null;
+    color: string | null;
+    inventory_location: string | null;
+    photos_status: string | null;
+    recent_report_id: string | null;
+    recent_report_type: string | null;
+    recent_report_generated_at: string | null;
   };
   const items = (data?.items ?? []).map((r: Row) => ({
     id: String(r.id),
@@ -40,9 +52,24 @@ export async function GET(request: Request) {
     year: r.year,
     patent: r.patent,
     price: r.price === null || r.price === undefined ? null : Number(r.price),
+    mileage: r.mileage,
     status: r.status,
+    stockNumber: r.stock_number,
+    vehicleType: r.vehicle_type,
+    fuelType: r.fuel_type,
+    transmission: r.transmission,
+    color: r.color,
+    inventoryLocation: r.inventory_location,
+    photosStatus: r.photos_status,
+    recentReport: r.recent_report_id
+      ? {
+          id: String(r.recent_report_id),
+          reportType: r.recent_report_type,
+          generatedAt: r.recent_report_generated_at,
+        }
+      : null,
   }));
-  return NextResponse.json({ ok: true, items });
+  return NextResponse.json({ ok: true, items, total: Number(data?.total ?? items.length) });
 }
 
 /** POST /api/crm/vehicles — da de alta una unidad en el inventario. */

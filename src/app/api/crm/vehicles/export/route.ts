@@ -19,6 +19,7 @@ const STATUS_LABEL: Record<string, string> = {
   SOLD: "Vendido",
   DRAFT: "Borrador",
   PAUSED: "Pausado",
+  ARCHIVED: "Archivado",
 };
 const KIND_LABEL: Record<string, string> = {
   purchase: "Stock propio",

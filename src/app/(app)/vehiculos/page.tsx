@@ -11,14 +11,17 @@ import {
   ClipboardCheck,
   Clock3,
   Download,
+  ExternalLink,
   FileText,
   Gauge,
   Pencil,
   Plus,
+  Star,
   Store,
 } from "lucide-react";
 
 import { InventoryFilters } from "@/components/stock/inventory-filters";
+import { ScrollSyncedTable } from "@/components/stock/scroll-synced-table";
 import { EmptyState, PageHeader, Panel, Pill } from "@/components/ui/primitives";
 import { canWrite, requireCrmSession } from "@/lib/auth/session";
 import {
@@ -41,6 +44,7 @@ const STATUS_LABEL: Record<string, string> = {
   SOLD: "Vendido",
   DRAFT: "Borrador",
   PAUSED: "Pausado",
+  ARCHIVED: "Archivado",
 };
 const KIND_LABEL: Record<string, string> = {
   purchase: "Stock propio",
@@ -147,6 +151,12 @@ function queryHref(params: VehicleSearchParams, changes: Record<string, string |
 
 function pageHref(params: VehicleSearchParams, page: number) {
   return queryHref(params, { page: String(page) });
+}
+
+/** URL absoluta de la ficha pública en el marketplace de frontend-web (mismo id que usa el CRM). */
+function marketplaceHref(vehicleId: string) {
+  const webAppUrl = process.env.WEB_APP_URL ?? "http://localhost:3000";
+  return new URL(`/vehiculos/${vehicleId}`, webAppUrl).toString();
 }
 
 function exportHref(params: VehicleSearchParams) {
@@ -277,34 +287,57 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
 
         <InventoryFilters key={JSON.stringify(filters)} values={filters} options={filterOptions} locations={locations} entrants={entrants} sort={sort} direction={direction} sortLabels={SORT_LABEL} filterCount={filterCount} />
 
-        <div className="max-h-[66vh] overflow-auto border-b border-[var(--border)]">
+        <ScrollSyncedTable
+          maxHeightClass="max-h-[62vh]"
+          footer={
+            <div className="flex flex-col gap-3 px-4 py-3 text-xs sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[var(--muted-foreground)]">
+                <span className="inline-flex items-center gap-1.5"><Gauge className="h-3.5 w-3.5" />Mostrando <strong className="text-[var(--foreground)]">{vehicles.items.length}</strong> de {vehicles.total}</span>
+                <span>Valor en esta página: <strong className="text-[var(--foreground)]">{fmtCLP(pageValue)}</strong></span>
+                <span>Página {vehicles.page} de {vehicles.totalPages}</span>
+              </div>
+              {vehicles.totalPages > 1 && (
+                <div className="flex gap-2">
+                  {vehicles.page > 1 && <Link href={pageHref(navigationFilters, vehicles.page - 1)} className="flex items-center gap-1 rounded-lg border border-[var(--border)] bg-white px-3 py-2 font-medium"><ArrowLeft className="h-3.5 w-3.5" />Anterior</Link>}
+                  {vehicles.page < vehicles.totalPages && <Link href={pageHref(navigationFilters, vehicles.page + 1)} className="flex items-center gap-1 rounded-lg border border-[var(--border)] bg-white px-3 py-2 font-medium">Siguiente<ArrowRight className="h-3.5 w-3.5" /></Link>}
+                </div>
+              )}
+            </div>
+          }
+        >
           <table className="min-w-[2960px] border-separate border-spacing-0 text-left text-xs">
             <thead className="sticky top-0 z-20">
               <tr>
+                {/* Identidad: fija (código/patente) + marca/modelo/año. */}
                 <SortableHead column="stockNumber" label="Código" sort={sort} direction={direction} filters={navigationFilters} className="sticky left-0 z-30 w-[112px] min-w-[112px]" />
                 <th className={`${GRID_HEAD} sticky left-[112px] z-30 w-[118px] min-w-[118px]`}>Patente</th>
                 <SortableHead column="brand" label="Marca" sort={sort} direction={direction} filters={navigationFilters} className="w-[135px] min-w-[135px]" />
                 <SortableHead column="model" label="Modelo" sort={sort} direction={direction} filters={navigationFilters} className="w-[165px] min-w-[165px]" />
                 <SortableHead column="year" label="Año" sort={sort} direction={direction} filters={navigationFilters} className="w-[75px] min-w-[75px]" />
+                {/* Comercial: lo que se escanea primero (precio, disponibilidad, rentabilidad). */}
+                <SortableHead column="price" label="Precio venta" sort={sort} direction={direction} filters={navigationFilters} className="w-[140px] min-w-[140px] text-right" />
+                <SortableHead column="status" label="Estado" sort={sort} direction={direction} filters={navigationFilters} className="w-[165px] min-w-[165px]" />
+                <th className={`${GRID_HEAD} w-[135px] min-w-[135px] text-right`}>Costo / mínimo</th>
+                <th className={`${GRID_HEAD} w-[140px] min-w-[140px] text-right`}>Margen est.</th>
+                {/* Condición y rotación. */}
                 <SortableHead column="mileage" label="Kilometraje" sort={sort} direction={direction} filters={navigationFilters} className="w-[125px] min-w-[125px]" />
+                <SortableHead column="stockDays" label="Días stock" sort={sort} direction={direction} filters={navigationFilters} className="w-[105px] min-w-[105px]" />
+                {/* Especificaciones técnicas. */}
                 <th className={`${GRID_HEAD} w-[105px] min-w-[105px]`}>Tipo</th>
                 <th className={`${GRID_HEAD} w-[110px] min-w-[110px]`}>Combustible</th>
                 <th className={`${GRID_HEAD} w-[115px] min-w-[115px]`}>Transmisión</th>
                 <th className={`${GRID_HEAD} w-[105px] min-w-[105px]`}>Color</th>
-                <th className={`${GRID_HEAD} w-[155px] min-w-[155px]`}>VIN / Chasis</th>
+                {/* Procedencia y logística. */}
                 <th className={`${GRID_HEAD} w-[140px] min-w-[140px]`}>Procedencia</th>
-                <th className={`${GRID_HEAD} w-[175px] min-w-[175px]`}>Consignante / entrega</th>
                 <th className={`${GRID_HEAD} w-[135px] min-w-[135px]`}>Situación legal</th>
                 <th className={`${GRID_HEAD} w-[150px] min-w-[150px]`}>Sucursal</th>
+                <th className={`${GRID_HEAD} w-[175px] min-w-[175px]`}>Consignante / entrega</th>
                 <th className={`${GRID_HEAD} w-[105px] min-w-[105px]`}>Estac.</th>
+                {/* Administrativo / referencia: lo que casi nunca se necesita al escanear. */}
                 <SortableHead column="receivedAt" label="Ingreso" sort={sort} direction={direction} filters={navigationFilters} className="w-[105px] min-w-[105px]" />
-                <SortableHead column="stockDays" label="Días stock" sort={sort} direction={direction} filters={navigationFilters} className="w-[105px] min-w-[105px]" />
-                <th className={`${GRID_HEAD} w-[135px] min-w-[135px] text-right`}>Costo / mínimo</th>
-                <SortableHead column="price" label="Precio venta" sort={sort} direction={direction} filters={navigationFilters} className="w-[140px] min-w-[140px] text-right" />
-                <th className={`${GRID_HEAD} w-[140px] min-w-[140px] text-right`}>Margen est.</th>
                 <SortableHead column="enteredBy" label="Ingresado por" sort={sort} direction={direction} filters={navigationFilters} className="w-[155px] min-w-[155px]" />
-                <SortableHead column="status" label="Estado" sort={sort} direction={direction} filters={navigationFilters} className="w-[165px] min-w-[165px]" />
-                <th className={`${GRID_HEAD} sticky right-0 z-30 w-[124px] min-w-[124px] text-center`}>Acciones</th>
+                <th className={`${GRID_HEAD} w-[155px] min-w-[155px]`}>VIN / Chasis</th>
+                <th className={`${GRID_HEAD} sticky right-0 z-30 w-[164px] min-w-[164px] text-center`}>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -317,30 +350,38 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
                 return (
                   <tr key={vehicle.id} className={`${index % 2 ? "bg-[#fbfbf9]" : "bg-white"} transition-colors hover:bg-[#eef4e9]`}>
                     <td className={`${GRID_CELL} sticky left-0 z-10 bg-inherit font-mono text-[11px] font-bold text-[var(--primary)]`}>{stockCode(vehicle.stockNumber)}</td>
-                    <td className={`${GRID_CELL} sticky left-[112px] z-10 bg-inherit font-mono text-sm font-bold tracking-wide`}>{fmtPlate(vehicle.patent)}</td>
+                    <td className={`${GRID_CELL} sticky left-[112px] z-10 bg-inherit font-mono text-sm font-bold tracking-wide`}>
+                      <span className="inline-flex items-center gap-1">
+                        {fmtPlate(vehicle.patent)}
+                        {vehicle.salePriority && (
+                          <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-500" aria-label="Prioridad de venta" />
+                        )}
+                      </span>
+                    </td>
                     <td className={`${GRID_CELL} font-semibold`}>{vehicle.brand || "—"}</td>
                     <td className={GRID_CELL}>{vehicle.model || "—"}</td>
                     <td className={`${GRID_CELL} text-center tabular-nums`}>{vehicle.year ?? "—"}</td>
+                    <td className={`${GRID_CELL} text-right font-bold tabular-nums`}>{fmtCLP(vehicle.price)}</td>
+                    <td className={GRID_CELL}><Pill variant={statusVariant(vehicle.status)}>{STATUS_LABEL[vehicle.status ?? ""] ?? vehicle.status ?? "—"}</Pill></td>
+                    <td className={`${GRID_CELL} text-right font-medium tabular-nums`}>{fmtCLP(base)}</td>
+                    <td className={`${GRID_CELL} text-right font-semibold tabular-nums ${margin != null && margin < 0 ? "text-red-600" : "text-[var(--primary)]"}`}>{fmtCLP(margin)}</td>
                     <td className={`${GRID_CELL} text-right tabular-nums`}>{vehicle.mileage == null ? "—" : `${fmtNumber(vehicle.mileage)} km`}</td>
+                    <td className={`${GRID_CELL} text-right tabular-nums`}><span className={`inline-flex min-w-10 justify-center rounded px-2 py-1 font-semibold ${stockDays > 60 ? "bg-red-50 text-red-700" : stockDays > 30 ? "bg-amber-50 text-amber-700" : "bg-[var(--muted)] text-[var(--foreground)]"}`}>{stockDays}</span></td>
                     <td className={GRID_CELL}>{vehicle.vehicleType || "—"}</td>
                     <td className={GRID_CELL}>{vehicle.fuelType || "—"}</td>
                     <td className={GRID_CELL}>{vehicle.transmission || "—"}</td>
                     <td className={GRID_CELL}>{vehicle.color || "—"}</td>
-                    <td className={`${GRID_CELL} max-w-[155px] overflow-hidden text-ellipsis font-mono`} title={vehicle.vin ?? undefined}>{vehicle.vin || "—"}</td>
                     <td className={GRID_CELL}><Pill variant={vehicle.acquisitionKind === "consignment" ? "warn" : "neutral"}>{KIND_LABEL[vehicle.acquisitionKind ?? ""] ?? "Sin registrar"}</Pill></td>
-                    <td className={`${GRID_CELL} max-w-[175px] overflow-hidden text-ellipsis font-medium`} title={vehicle.ownerName ?? undefined}>{vehicle.ownerName || "Sin registrar"}</td>
                     <td className={GRID_CELL}>{LIEN_LABEL[vehicle.lienStatus ?? "unknown"]}</td>
                     <td className={`${GRID_CELL} max-w-[150px] overflow-hidden text-ellipsis`} title={vehicle.inventoryLocation ?? undefined}>{vehicle.inventoryLocation || "Sin ubicación"}</td>
+                    <td className={`${GRID_CELL} max-w-[175px] overflow-hidden text-ellipsis font-medium`} title={vehicle.ownerName ?? undefined}>{vehicle.ownerName || "Sin registrar"}</td>
                     <td className={`${GRID_CELL} text-center font-mono font-bold text-[var(--fm-navy)]`} title={vehicle.parkingNumber == null ? `Detailing: ${vehicle.detailingStatus} · Fotos: ${vehicle.photosStatus}` : undefined}>{vehicle.parkingNumber != null ? `E-${String(vehicle.parkingNumber).padStart(3, "0")}` : vehicle.detailingStatus !== "completed" || vehicle.photosStatus !== "completed" ? "Pendiente" : vehicle.parkingCapacity === 0 ? "No config." : "Sin cupo"}</td>
                     <td className={GRID_CELL}>{fmtDate(vehicle.receivedAt ?? vehicle.createdAt)}</td>
-                    <td className={`${GRID_CELL} text-right tabular-nums`}><span className={`inline-flex min-w-10 justify-center rounded px-2 py-1 font-semibold ${stockDays > 60 ? "bg-red-50 text-red-700" : stockDays > 30 ? "bg-amber-50 text-amber-700" : "bg-[var(--muted)] text-[var(--foreground)]"}`}>{stockDays}</span></td>
-                    <td className={`${GRID_CELL} text-right font-medium tabular-nums`}>{fmtCLP(base)}</td>
-                    <td className={`${GRID_CELL} text-right font-bold tabular-nums`}>{fmtCLP(vehicle.price)}</td>
-                    <td className={`${GRID_CELL} text-right font-semibold tabular-nums ${margin != null && margin < 0 ? "text-red-600" : "text-[var(--primary)]"}`}>{fmtCLP(margin)}</td>
                     <td className={`${GRID_CELL} font-medium`}>{vehicle.enteredByName || "Sin registrar"}</td>
-                    <td className={GRID_CELL}><Pill variant={statusVariant(vehicle.status)}>{STATUS_LABEL[vehicle.status ?? ""] ?? vehicle.status ?? "—"}</Pill></td>
+                    <td className={`${GRID_CELL} max-w-[155px] overflow-hidden text-ellipsis font-mono`} title={vehicle.vin ?? undefined}>{vehicle.vin || "—"}</td>
                     <td className={`${GRID_CELL} sticky right-0 z-10 bg-inherit`}>
                       <div className="flex justify-center gap-1">
+                        <a href={marketplaceHref(vehicle.id)} target="_blank" rel="noopener noreferrer" aria-label={`Ver ficha de ${vehicle.patent} en el marketplace`} title="Ver ficha en el marketplace" className="inline-flex rounded-md border border-[var(--border)] bg-white p-2 hover:border-[var(--primary)]"><ExternalLink className="h-3.5 w-3.5" /></a>
                         {vehicle.acquisitionId && <a href={`/api/crm/acquisitions/${vehicle.acquisitionId}/contract`} target="_blank" rel="noopener noreferrer" aria-label={`Contrato ${vehicle.patent}`} title="Ver contrato" className="inline-flex rounded-md border border-[var(--border)] bg-white p-2 hover:border-[var(--primary)]"><FileText className="h-3.5 w-3.5" /></a>}
                         {vehicle.acquisitionId && <a href={`/api/crm/acquisitions/${vehicle.acquisitionId}/inspection`} target="_blank" rel="noopener noreferrer" aria-label={`Inspección ${vehicle.patent}`} title="Imprimir inspección" className="inline-flex rounded-md border border-[var(--border)] bg-white p-2 hover:border-[var(--primary)]"><ClipboardCheck className="h-3.5 w-3.5" /></a>}
                         {canEdit && <Link href={`/vehiculos/editar/${vehicle.id}`} aria-label={`Editar ${vehicle.patent}`} title="Editar vehículo" className="inline-flex rounded-md border border-[var(--border)] bg-white p-2 hover:border-[var(--primary)]"><Pencil className="h-3.5 w-3.5" /></Link>}
@@ -351,21 +392,7 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
               })}
             </tbody>
           </table>
-        </div>
-
-        <div className="flex flex-col gap-3 px-4 py-3 text-xs sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[var(--muted-foreground)]">
-            <span className="inline-flex items-center gap-1.5"><Gauge className="h-3.5 w-3.5" />Mostrando <strong className="text-[var(--foreground)]">{vehicles.items.length}</strong> de {vehicles.total}</span>
-            <span>Valor en esta página: <strong className="text-[var(--foreground)]">{fmtCLP(pageValue)}</strong></span>
-            <span>Página {vehicles.page} de {vehicles.totalPages}</span>
-          </div>
-          {vehicles.totalPages > 1 && (
-            <div className="flex gap-2">
-              {vehicles.page > 1 && <Link href={pageHref(navigationFilters, vehicles.page - 1)} className="flex items-center gap-1 rounded-lg border border-[var(--border)] bg-white px-3 py-2 font-medium"><ArrowLeft className="h-3.5 w-3.5" />Anterior</Link>}
-              {vehicles.page < vehicles.totalPages && <Link href={pageHref(navigationFilters, vehicles.page + 1)} className="flex items-center gap-1 rounded-lg border border-[var(--border)] bg-white px-3 py-2 font-medium">Siguiente<ArrowRight className="h-3.5 w-3.5" /></Link>}
-            </div>
-          )}
-        </div>
+        </ScrollSyncedTable>
       </Panel>
     </>
   );

@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { clsx } from "clsx";
-import { ArrowRightLeft, Building2, CalendarCheck2, ChevronDown, FileClock, FilePlus2, LogOut, MapPin, Store, Users } from "lucide-react";
+import { ArrowRightLeft, Building2, CalendarCheck2, ChevronDown, FileClock, FilePlus2, Landmark, LogOut, MapPin, Store, Users } from "lucide-react";
 
 import { CRM_ROLE_LABEL, canManageTeam, canWrite, isDealershipAdmin, type CrmRole } from "@/lib/auth/roles";
 
@@ -97,8 +97,10 @@ export function UserMenu({ user, className }: { user: UserMenuUser; className?: 
           </div>
 
           <div className="border-b border-[var(--border)] py-1 lg:hidden">
+            <MenuLink href="/captacion" icon={ArrowRightLeft} label="Captación de vehículos" onNavigate={() => setOpen(false)} />
             <MenuLink href="/informes" icon={FileClock} label="Informe histórico" onNavigate={() => setOpen(false)} />
             <MenuLink href="/informes-precompra" icon={CalendarCheck2} label="Informe de precompra" onNavigate={() => setOpen(false)} />
+            <MenuLink href="/creditos" icon={Landmark} label="Créditos" onNavigate={() => setOpen(false)} />
             <MenuLink href="/transferencias" icon={ArrowRightLeft} label="Transferencias" onNavigate={() => setOpen(false)} />
             {canWrite(user.role) && (
               <MenuLink href="/informes/create" icon={FilePlus2} label="Solicitar informes" onNavigate={() => setOpen(false)} />

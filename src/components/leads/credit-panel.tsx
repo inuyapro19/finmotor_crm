@@ -17,26 +17,27 @@ import { clsx } from "clsx";
 import { Banknote, Building2, CheckCircle2, Clock, Loader2, Send } from "lucide-react";
 import { toast } from "sonner";
 
+import { creditStatus } from "@/lib/credit";
 import { fmtCLP, fmtDateTime } from "@/lib/format";
 import { crmErrorMessage, crmFetch } from "@/lib/api/crm-fetch";
 import type { CreditRequest, CreditTerms } from "@/lib/data/crm";
 import type { Lead } from "@/lib/leads";
 import { CurrencyInput } from "@/components/ui/currency-input";
+import type { PillVariant } from "@/components/ui/primitives";
 
 /** Estados con los que vuelve la financiera (`credit_leads.status`). */
-const STATUS_LABEL: Record<string, { label: string; tone: string }> = {
-  requested: { label: "En evaluación", tone: "bg-[#e7edff] text-[var(--fm-navy)]" },
-  in_review: { label: "En evaluación", tone: "bg-[#e7edff] text-[var(--fm-navy)]" },
-  approved: { label: "Aprobado", tone: "bg-[var(--accent)] text-[var(--accent-foreground)]" },
-  rejected: { label: "Rechazado", tone: "bg-red-100 text-red-700" },
-  expired: { label: "Vencido", tone: "bg-[var(--muted)] text-[var(--muted-foreground)]" },
+/** Los tonos son los mismos de `Pill`; el vocabulario vive en `lib/credit`. */
+const TONE: Record<PillVariant, string> = {
+  neutral: "bg-[var(--muted)] text-[var(--muted-foreground)]",
+  success: "bg-[var(--accent)] text-[var(--accent-foreground)]",
+  warn: "bg-amber-100 text-amber-800",
+  danger: "bg-red-100 text-red-700",
+  info: "bg-[#e7edff] text-[var(--fm-navy)]",
 };
 
 function statusOf(status: string | null) {
-  return STATUS_LABEL[String(status ?? "").toLowerCase()] ?? {
-    label: status ?? "Enviada",
-    tone: "bg-[var(--muted)] text-[var(--muted-foreground)]",
-  };
+  const { label, variant } = creditStatus(status);
+  return { label, tone: TONE[variant] };
 }
 
 /** Cuota con la fórmula del simulador público. La tasa la manda el servidor. */
@@ -61,6 +62,7 @@ export function CreditPanel({
   const [term, setTerm] = useState<number>(terms.terms.includes(36) ? 36 : terms.terms[0] ?? 36);
   const [down, setDown] = useState<number | null>(lead.quotedDownPayment);
   const [rut, setRut] = useState(lead.contactRut ?? "");
+  const [email, setEmail] = useState(lead.contactEmail ?? "");
   const [notes, setNotes] = useState("");
   const [sending, setSending] = useState(false);
 
@@ -83,6 +85,7 @@ export function CreditPanel({
           termMonths: term,
           downPayment: down ?? 0,
           rut: rut.trim() || null,
+          contactEmail: email.trim() || null,
           notes: notes.trim() || null,
         }),
       });
@@ -177,6 +180,20 @@ export function CreditPanel({
               />
               <span className="mt-1 block text-[11px] text-[var(--muted-foreground)]">
                 Sin RUT la financiera no puede evaluar. Queda guardado en la solicitud.
+              </span>
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium">Correo del cliente</span>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="cliente@correo.cl"
+                className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--card)] px-3 py-2.5 text-sm outline-none focus:border-[var(--primary)]"
+              />
+              <span className="mt-1 block text-[11px] text-[var(--muted-foreground)]">
+                Ahí le llegarán las propuestas de financiamiento comparadas cuando estén listas.
               </span>
             </label>
 

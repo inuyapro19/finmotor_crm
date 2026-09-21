@@ -27,6 +27,7 @@ import {
   type Lead,
   type LeadActivity,
   type LeadTask,
+  type LeadVehicleInterest,
   type MyTask,
 } from "@/lib/leads";
 
@@ -79,6 +80,7 @@ export type VehicleRow = {
   transmission: string | null;
   vin: string | null;
   color: string | null;
+  salePriority: boolean;
   enteredById: string | null;
   enteredByName: string | null;
   isVerified: boolean;
@@ -120,6 +122,10 @@ export type VehicleDetail = {
   color: string | null;
   doors: number | null;
   description: string | null;
+  financingAvailable: boolean;
+  /** La automotora la marcó como prioritaria para vender (señal de negocio para MIA, no de
+   * calce con el comprador — ver vehicle-score.ts en frontend-web). */
+  salePriority: boolean;
   photos: { id: string; url: string; position: number }[];
 };
 
@@ -164,12 +170,28 @@ export type CreditRequest = {
 /** Tasa y plazos con los que simula el mostrador. Vienen del backend, no se copian aquí. */
 export type CreditTerms = { monthlyRate: number; terms: number[] };
 
+/**
+ * Términos del cobro, calculados por el servidor — que es además quien los valida al
+ * registrar el pago. No deducir esto acá: cuando el frontend lo hacía por su cuenta
+ * (`creditRequests.length > 0`, que cuenta las rechazadas) pedía el pie mientras el backend
+ * esperaba el total, y el agente recibía un `amount_mismatch` sin explicación.
+ */
+export type SaleTerms = {
+  /** true = se cobra el pie; false = el total. */
+  financed: boolean;
+  /** Respuesta de la financiera ya transcrita: "approved" | "rejected" | null (sin respuesta). */
+  financeStatus: string | null;
+  amountDueClp: number;
+};
+
 export type LeadDetail = {
   lead: Lead;
   activities: LeadActivity[];
   tasks: LeadTask[];
+  vehicleInterests: LeadVehicleInterest[];
   creditRequests: CreditRequest[];
   creditTerms: CreditTerms;
+  sale: SaleTerms;
 };
 
 /** Detalle con bitácora, tareas, cotización y financiamiento, para la ficha. */
@@ -179,16 +201,27 @@ export async function getLeadDetail(leadId: string): Promise<LeadDetail | null> 
     lead: BackendCrmLead;
     activities: LeadActivity[];
     tasks: LeadTask[];
+    vehicleInterests: LeadVehicleInterest[];
     creditRequests: CreditRequest[];
     creditTerms: CreditTerms;
+    sale: SaleTerms;
   }>(`/backoffice/leads/${leadId}`);
   if (!data?.lead) return null;
+  const lead = fromCrmLead(data.lead);
   return {
-    lead: fromCrmLead(data.lead),
+    lead,
     activities: data.activities ?? [],
     tasks: data.tasks ?? [],
+    vehicleInterests: data.vehicleInterests ?? [],
     creditRequests: data.creditRequests ?? [],
     creditTerms: data.creditTerms ?? { monthlyRate: 0.021, terms: [12, 24, 36, 48] },
+    // Respaldo sólo por si el backend es más viejo que este build: sin financiamiento y el
+    // total a cobrar, que es la lectura conservadora (nunca cobrar de menos).
+    sale: data.sale ?? {
+      financed: false,
+      financeStatus: lead.financeStatus ?? null,
+      amountDueClp: Math.round(lead.quotedPrice ?? lead.vehiclePrice ?? 0),
+    },
   };
 }
 
@@ -268,6 +301,8 @@ export type Organization = {
   notaryOffice: string | null;
   notaryName: string | null;
   defaultCommissionPct: number | null;
+  hasLogo: boolean;
+  logoUpdatedAt: string | null;
   channels: OrganizationChannel[];
 };
 
@@ -286,7 +321,11 @@ export type InventoryHistoryItem = {
   locationName: string | null;
   soldAt: string | null;
   purchaseId: string | null;
+  purchasePrice: number | null;
   saleAmount: number | null;
+  tradeInValue: number | null;
+  minPrice: number | null;
+  commissionPct: number | null;
   enteredById: string | null;
   enteredByName: string | null;
   salesAgentId: string | null;
@@ -342,7 +381,9 @@ export const getOrganization = cache(async function getOrganization(
   return data?.organization ?? null;
 });
 
-export type LeadListSort = "urgency" | "progress" | "value" | "recent";
+/** `priority` = Opportunity Priority Score del motor MIA-CRM (R-PRI-01): margen
+ *  esperado por dia ajustado por vendedor, no antiguedad del lead. */
+export type LeadListSort = "priority" | "urgency" | "progress" | "value" | "recent";
 export type LeadListFilters = {
   page: number;
   pageSize: number;
@@ -352,6 +393,9 @@ export type LeadListFilters = {
   overdue?: boolean;
   source?: string;
   locationId?: string;
+  /** Fecha de creación del lead, formato `YYYY-MM-DD` (inclusive). */
+  dateFrom?: string;
+  dateTo?: string;
   sort: LeadListSort;
 };
 export type LeadListResult = {
@@ -379,6 +423,8 @@ export async function getLeadPage(
   if (filters.overdue) params.set("overdue", "true");
   if (filters.source) params.set("source", filters.source);
   if (filters.locationId) params.set("locationId", filters.locationId);
+  if (filters.dateFrom) params.set("from", filters.dateFrom);
+  if (filters.dateTo) params.set("to", filters.dateTo);
 
   const fallback: LeadListResult = {
     leads: [],
@@ -487,6 +533,8 @@ export async function getReports(
     status?: string;
     billingStatus?: string;
     reportType?: ReportType;
+    /** Sólo los informes que pidió esta persona (tarjeta "mío" del agente en el Dashboard). */
+    requestedById?: string;
   } = {},
 ): Promise<ReportsResult> {
   const page = Math.max(1, opts.page ?? 1);
@@ -497,6 +545,7 @@ export async function getReports(
   if (opts.status) params.set("status", opts.status);
   if (opts.billingStatus) params.set("billingStatus", opts.billingStatus);
   if (opts.reportType) params.set("reportType", opts.reportType);
+  if (opts.requestedById) params.set("requestedById", opts.requestedById);
 
   try {
     const data = await backendJson<{
@@ -561,6 +610,8 @@ export type PrepurchaseReport = {
   billingMode: string;
   createdAt: string | null;
   updatedAt: string | null;
+  resultAvailable: boolean;
+  resultFilename: string | null;
 };
 
 export type PrepurchaseReportSummary = {
@@ -744,7 +795,15 @@ export type DealershipTransferSummary = {
 
 export async function getDealershipTransfers(
   organizationId: string,
-  options: { page?: number; limit?: number; status?: string } = {},
+  options: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    from?: string;
+    to?: string;
+    /** Sólo transferencias de leads asignados a este agente (tarjeta "mío" del Dashboard). */
+    assignedAgentId?: string;
+  } = {},
 ) {
   const params = new URLSearchParams({
     organizationId,
@@ -752,6 +811,9 @@ export async function getDealershipTransfers(
     limit: String(options.limit ?? 25),
   });
   if (options.status) params.set("status", options.status);
+  if (options.from) params.set("from", options.from);
+  if (options.to) params.set("to", options.to);
+  if (options.assignedAgentId) params.set("assignedAgentId", options.assignedAgentId);
   const data = await backendJsonOrNull<{
     ok: boolean;
     transfers: DealershipTransfer[];
@@ -765,6 +827,78 @@ export async function getDealershipTransfers(
     pagination: { page: options.page ?? 1, limit: options.limit ?? 25, total: 0, pages: 1 },
   };
 }
+
+export type CreditLeadRow = {
+  id: string;
+  commercialLeadId: string | null;
+  vehicleId: string | null;
+  vehicleLabel: string | null;
+  vehiclePatent: string | null;
+  buyerName: string | null;
+  buyerPhone: string | null;
+  rut: string | null;
+  requestedAmount: number | null;
+  downPaymentAmount: number | null;
+  termMonths: number | null;
+  monthlyPayment: number | null;
+  status: string;
+  institutionName: string | null;
+  approvedAmount: number | null;
+  createdAt: string | null;
+};
+
+export async function getCreditLeads(options: { page?: number; limit?: number; status?: string } = {}): Promise<{
+  items: CreditLeadRow[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}> {
+  const page = Math.max(1, options.page ?? 1);
+  const limit = Math.min(100, Math.max(1, options.limit ?? 25));
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (options.status) params.set("status", options.status);
+  const data = await backendJsonOrNull<{
+    ok: boolean;
+    items: Record<string, unknown>[];
+    total: number;
+  }>(`/backoffice/credit-leads?${params.toString()}`);
+  const items = (data?.items ?? []).map((row) => ({
+    id: String(row.id),
+    commercialLeadId: row.commercial_lead_id ? String(row.commercial_lead_id) : null,
+    vehicleId: row.vehicle_id ? String(row.vehicle_id) : null,
+    vehicleLabel: typeof row.vehicle_label === "string" ? row.vehicle_label : null,
+    vehiclePatent: typeof row.vehicle_patent === "string" ? row.vehicle_patent : null,
+    buyerName: typeof row.buyer_name === "string" ? row.buyer_name : null,
+    buyerPhone: typeof row.buyer_phone === "string" ? row.buyer_phone : null,
+    rut: typeof row.rut === "string" ? row.rut : null,
+    requestedAmount: row.requested_amount == null ? null : Number(row.requested_amount),
+    downPaymentAmount: row.down_payment_amount == null ? null : Number(row.down_payment_amount),
+    termMonths: row.term_months == null ? null : Number(row.term_months),
+    monthlyPayment: row.monthly_payment == null ? null : Number(row.monthly_payment),
+    // `requested` desaparecio en la migracion 0051; un default asi disfrazaba de
+    // "en evaluacion" a una fila cuyo estado no llego.
+    status: typeof row.status === "string" ? row.status : "",
+    institutionName: typeof row.institution_name === "string" ? row.institution_name : null,
+    approvedAmount: row.approved_amount == null ? null : Number(row.approved_amount),
+    createdAt: typeof row.created_at === "string" ? row.created_at : null,
+  }));
+  const total = Number(data?.total ?? items.length);
+  return { items, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
+}
+
+/** Total de solicitudes de crédito visibles para la automotora, opcionalmente acotado a un periodo. */
+export const getCreditLeadTotal = cache(async function getCreditLeadTotal(
+  opts: { from?: string; to?: string } = {},
+): Promise<number> {
+  const params = new URLSearchParams({ page: "1", limit: "1" });
+  if (opts.from) params.set("from", opts.from);
+  if (opts.to) params.set("to", opts.to);
+  const data = await backendJsonOrNull<{ ok: boolean; total: number }>(
+    `/backoffice/credit-leads?${params.toString()}`,
+  );
+  return Number(data?.total ?? 0);
+});
 
 /* ── Stock ───────────────────────────────────────────────────────── */
 
@@ -799,6 +933,7 @@ type BackendVehicleRow = {
   transmission: string | null;
   vin: string | null;
   color: string | null;
+  sale_priority: boolean | null;
   entered_by_id: string | null;
   entered_by_name: string | null;
   status: string | null;
@@ -933,6 +1068,7 @@ export async function getVehicles(opts: {
     transmission: r.transmission,
     vin: r.vin,
     color: r.color,
+    salePriority: Boolean(r.sale_priority),
     enteredById: r.entered_by_id,
     enteredByName: r.entered_by_name,
     isVerified: Boolean(r.is_verified),
@@ -979,6 +1115,8 @@ type BackendVehicleDetail = {
   color: string | null;
   doors: number | null;
   description: string | null;
+  financing_available: boolean | null;
+  sale_priority: boolean | null;
 };
 
 export async function getVehicleDetail(vehicleId: string): Promise<{
@@ -1016,6 +1154,8 @@ export async function getVehicleDetail(vehicleId: string): Promise<{
       color: v.color,
       doors: v.doors,
       description: v.description,
+      financingAvailable: Boolean(v.financing_available),
+      salePriority: Boolean(v.sale_priority),
       photos: (data?.photos ?? []).map((photo) => ({
         id: String(photo.id),
         url: String(photo.url),
@@ -1059,6 +1199,9 @@ export async function getInventoryHistory(opts: {
     model: string | null; year: number | null; vehicle_status: string | null; acquisition_kind: string | null;
     received_at: string | null; exited_at: string | null; exit_reason: string | null; location_name: string | null;
     sold_at: string | null; purchase_id: string | null; sale_amount: number | string | null;
+    purchase_price: number | string | null;
+    min_price: number | string | null;
+    commission_pct: number | string | null;
     entered_by_id: string | null; entered_by_name: string | null; sales_agent_id: string | null;
     sales_agent_name: string | null; outcome: "active" | "sold" | "exited"; stock_days: number;
     estimated_margin: number | string | null; event_at: string | null;
@@ -1079,6 +1222,11 @@ export async function getInventoryHistory(opts: {
       acquisitionKind: row.acquisition_kind, receivedAt: row.received_at, exitedAt: row.exited_at,
       exitReason: row.exit_reason, locationName: row.location_name, soldAt: row.sold_at,
       purchaseId: row.purchase_id, saleAmount: row.sale_amount == null ? null : Number(row.sale_amount),
+      // El mínimo de consignación y el valor de parte de pago no son precios de compra.
+      purchasePrice: row.acquisition_kind === "purchase" && row.purchase_price != null ? Number(row.purchase_price) : null,
+      tradeInValue: row.acquisition_kind === "trade_in" && row.min_price != null ? Number(row.min_price) : null,
+      minPrice: row.acquisition_kind === "consignment" && row.min_price != null ? Number(row.min_price) : null,
+      commissionPct: row.acquisition_kind === "consignment" && row.commission_pct != null ? Number(row.commission_pct) : null,
       enteredById: row.entered_by_id, enteredByName: row.entered_by_name,
       salesAgentId: row.sales_agent_id, salesAgentName: row.sales_agent_name, outcome: row.outcome,
       stockDays: Number(row.stock_days ?? 0),
@@ -1089,6 +1237,36 @@ export async function getInventoryHistory(opts: {
     summary: data?.summary ?? { active: 0, sold: 0, exited: 0, salesAmount: 0, estimatedMargin: 0, avgStockDays: 0 },
     byAgent: data?.byAgent ?? [],
     byKind: data?.byKind ?? [],
+  };
+}
+
+/* ── Serie temporal de ventas (gráficos del Dashboard) ───────────── */
+
+export type SalesTimeseriesPoint = { period: string; sold: number; salesAmount: number };
+
+/** `GET /backoffice/inventory/sales-timeseries`: una sola llamada alimenta el gráfico
+ * mensual (12 meses) y el de barras diarias del Dashboard, siempre con el mismo rango. */
+export type SalesTimeseries = {
+  from: string;
+  to: string;
+  daily: SalesTimeseriesPoint[];
+  monthly: SalesTimeseriesPoint[];
+};
+
+export async function getSalesTimeseries(opts: { from?: string; to?: string } = {}): Promise<SalesTimeseries> {
+  const params = new URLSearchParams();
+  if (opts.from) params.set("from", opts.from);
+  if (opts.to) params.set("to", opts.to);
+  const qs = params.toString();
+  type RawPoint = { day?: string; month?: string; sold: number; salesAmount: number };
+  const data = await backendJsonOrNull<{
+    ok: boolean; from: string; to: string; daily: RawPoint[]; monthly: RawPoint[];
+  }>(`/backoffice/inventory/sales-timeseries${qs ? `?${qs}` : ""}`);
+  return {
+    from: data?.from ?? opts.from ?? "",
+    to: data?.to ?? opts.to ?? "",
+    daily: (data?.daily ?? []).map((r) => ({ period: r.day ?? "", sold: r.sold, salesAmount: r.salesAmount })),
+    monthly: (data?.monthly ?? []).map((r) => ({ period: r.month ?? "", sold: r.sold, salesAmount: r.salesAmount })),
   };
 }
 
@@ -1119,7 +1297,8 @@ export type AgentPerformance = {
 };
 
 export type Performance = {
-  days: number;
+  from: string;
+  to: string;
   portfolioRestricted: boolean;
   totals: {
     openLeads: number;
@@ -1140,7 +1319,8 @@ export type Performance = {
 };
 
 const EMPTY_PERFORMANCE: Performance = {
-  days: 30,
+  from: "",
+  to: "",
   portfolioRestricted: true,
   totals: {
     openLeads: 0,
@@ -1161,14 +1341,19 @@ const EMPTY_PERFORMANCE: Performance = {
 };
 
 export const getPerformance = cache(async function getPerformance(
-  days = 30,
+  opts: { from?: string; to?: string } = {},
 ): Promise<Performance> {
+  const params = new URLSearchParams();
+  if (opts.from) params.set("from", opts.from);
+  if (opts.to) params.set("to", opts.to);
+  const qs = params.toString();
   const data = await backendJsonOrNull<{ ok: boolean } & Performance>(
-    `/backoffice/analytics/performance?days=${days}`,
+    `/backoffice/analytics/performance${qs ? `?${qs}` : ""}`,
   );
-  if (!data) return { ...EMPTY_PERFORMANCE, days };
+  if (!data) return { ...EMPTY_PERFORMANCE, from: opts.from ?? "", to: opts.to ?? "" };
   return {
-    days: data.days ?? days,
+    from: data.from ?? opts.from ?? "",
+    to: data.to ?? opts.to ?? "",
     portfolioRestricted: Boolean(data.portfolioRestricted),
     totals: { ...EMPTY_PERFORMANCE.totals, ...(data.totals ?? {}) },
     funnel: data.funnel ?? [],

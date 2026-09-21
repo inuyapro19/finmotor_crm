@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 
 import { apiFetch } from "@/lib/api/client";
-import { canManageTeam, requireCrmApiSession } from "@/lib/auth/session";
+import { canWrite, requireCrmApiSession } from "@/lib/auth/session";
 
 
 export async function POST(request: Request) {
   const auth = await requireCrmApiSession();
   if (!auth.ok) return auth.response;
   const session = auth.session;
-  if (!canManageTeam(session.role)) {
+  if (!canWrite(session.role)) {
     return NextResponse.json({ error: "No tienes permisos para subir archivos" }, { status: 403 });
   }
   const body = await request.json().catch(() => null);

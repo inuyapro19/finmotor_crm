@@ -7,25 +7,7 @@ import { EmptyState, Notice, PageHeader, Panel, Pill, StatCard } from "@/compone
 import { canManageTransfers, requireCrmSession } from "@/lib/auth/session";
 import { getAcquisitions, getDealershipTransfers, getLeads, getOrganization } from "@/lib/data/crm";
 import { fmtCLP, fmtDateTime, fmtNumber, fmtPlate } from "@/lib/format";
-
-
-const STATUS_LABEL: Record<string, string> = {
-  PENDING: "Pendiente",
-  SUBMITTED: "Enviada",
-  BUYER_SIGNED: "Firmó comprador",
-  SELLER_SIGNED: "Firmó vendedor",
-  COMPLETED: "Completada",
-  FAILED: "Fallida",
-  EXPIRED: "Vencida",
-  CANCELLED: "Cancelada",
-};
-
-function statusVariant(status: string) {
-  if (status === "COMPLETED") return "success" as const;
-  if (["FAILED", "EXPIRED", "CANCELLED"].includes(status)) return "danger" as const;
-  if (["SUBMITTED", "BUYER_SIGNED", "SELLER_SIGNED"].includes(status)) return "info" as const;
-  return "warn" as const;
-}
+import { TRANSFER_STATUS, transferStatus } from "@/lib/transfers";
 
 export default async function TransfersPage({ searchParams }: { searchParams: Promise<{ status?: string; page?: string }> }) {
   const filters = await searchParams;
@@ -64,7 +46,7 @@ export default async function TransfersPage({ searchParams }: { searchParams: Pr
         <form action="/transferencias" className="flex flex-col gap-3 p-3 sm:flex-row">
           <select name="status" defaultValue={filters.status ?? ""} className="flex-1 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--card)] px-3 py-2.5 text-sm">
             <option value="">Todos los estados</option>
-            {Object.entries(STATUS_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            {Object.entries(TRANSFER_STATUS).map(([value, { label }]) => <option key={value} value={value}>{label}</option>)}
           </select>
           <button className="flex items-center justify-center gap-1.5 rounded-[var(--radius-md)] bg-[var(--fm-navy)] px-4 py-2.5 text-sm font-medium text-white"><Search className="h-4 w-4" />Filtrar</button>
         </form>
@@ -78,12 +60,12 @@ export default async function TransfersPage({ searchParams }: { searchParams: Pr
               <table className="w-full min-w-[980px] border-collapse text-left text-xs">
                 <thead className="bg-[var(--muted)]/60 text-[10px] uppercase tracking-wide text-[var(--muted-foreground)]"><tr><th className="px-4 py-3">Vehículo</th><th className="px-3 py-3">Vendedor</th><th className="px-3 py-3">Comprador</th><th className="px-3 py-3">Sucursal / lead</th><th className="px-3 py-3">Estado</th><th className="px-3 py-3 text-right">Servicio</th><th className="px-3 py-3">Creada</th><th className="px-4 py-3" /></tr></thead>
                 <tbody className="divide-y divide-[var(--border)]">{result.transfers.map((transfer) => (
-                  <tr key={transfer.id}><td className="px-4 py-3"><p className="font-mono font-semibold">{fmtPlate(transfer.plate)}</p><p className="text-[var(--muted-foreground)]">{transfer.vehicleLabel || "Vehículo"} · {fmtCLP(transfer.vehicleValueClp)}</p></td><td className="px-3 py-3"><p className="font-medium">{transfer.seller.name || "—"}</p><p className="font-mono text-[var(--muted-foreground)]">{transfer.seller.rut || "—"}</p></td><td className="px-3 py-3"><p className="font-medium">{transfer.buyer.companyName || session.dealership.name}</p><p className="font-mono text-[var(--muted-foreground)]">{transfer.buyer.companyRut || "—"}</p></td><td className="px-3 py-3"><p>{transfer.locationName || "—"}</p><p className="text-[var(--muted-foreground)]">{transfer.leadName || "Sin solicitud"}</p></td><td className="px-3 py-3"><Pill variant={statusVariant(transfer.status)}>{STATUS_LABEL[transfer.status] || transfer.status}</Pill></td><td className="px-3 py-3 text-right font-mono font-medium">{fmtCLP(transfer.serviceFeeClp)}</td><td className="px-3 py-3 text-[var(--muted-foreground)]">{fmtDateTime(transfer.createdAt)}</td><td className="px-4 py-3">{canOperate && <TransferStatusAction transferId={transfer.id} status={transfer.status} />}</td></tr>
+                  <tr key={transfer.id}><td className="px-4 py-3"><p className="font-mono font-semibold">{fmtPlate(transfer.plate)}</p><p className="text-[var(--muted-foreground)]">{transfer.vehicleLabel || "Vehículo"} · {fmtCLP(transfer.vehicleValueClp)}</p></td><td className="px-3 py-3"><p className="font-medium">{transfer.seller.name || "—"}</p><p className="font-mono text-[var(--muted-foreground)]">{transfer.seller.rut || "—"}</p></td><td className="px-3 py-3"><p className="font-medium">{transfer.buyer.companyName || session.dealership.name}</p><p className="font-mono text-[var(--muted-foreground)]">{transfer.buyer.companyRut || "—"}</p></td><td className="px-3 py-3"><p>{transfer.locationName || "—"}</p><p className="text-[var(--muted-foreground)]">{transfer.leadName || "Sin solicitud"}</p></td><td className="px-3 py-3"><Pill variant={transferStatus(transfer.status).variant}>{transferStatus(transfer.status).label}</Pill></td><td className="px-3 py-3 text-right font-mono font-medium">{fmtCLP(transfer.serviceFeeClp)}</td><td className="px-3 py-3 text-[var(--muted-foreground)]">{fmtDateTime(transfer.createdAt)}</td><td className="px-4 py-3">{canOperate && <TransferStatusAction transferId={transfer.id} status={transfer.status} />}</td></tr>
                 ))}</tbody>
               </table>
             </div>
             <ul className="divide-y divide-[var(--border)] lg:hidden">{result.transfers.map((transfer) => (
-              <li key={transfer.id} className="space-y-3 p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-mono text-sm font-semibold">{fmtPlate(transfer.plate)}</p><p className="text-xs text-[var(--muted-foreground)]">{transfer.vehicleLabel || "Vehículo"}</p></div><Pill variant={statusVariant(transfer.status)}>{STATUS_LABEL[transfer.status] || transfer.status}</Pill></div><div className="grid grid-cols-2 gap-3 text-xs"><div><p className="text-[10px] uppercase text-[var(--muted-foreground)]">Vendedor</p><p>{transfer.seller.name || "—"}</p></div><div><p className="text-[10px] uppercase text-[var(--muted-foreground)]">Sucursal</p><p>{transfer.locationName || "—"}</p></div><div><p className="text-[10px] uppercase text-[var(--muted-foreground)]">Valor vehículo</p><p>{fmtCLP(transfer.vehicleValueClp)}</p></div><div><p className="text-[10px] uppercase text-[var(--muted-foreground)]">Servicio</p><p className="font-semibold">{fmtCLP(transfer.serviceFeeClp)}</p></div></div>{canOperate && <TransferStatusAction transferId={transfer.id} status={transfer.status} />}</li>
+              <li key={transfer.id} className="space-y-3 p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-mono text-sm font-semibold">{fmtPlate(transfer.plate)}</p><p className="text-xs text-[var(--muted-foreground)]">{transfer.vehicleLabel || "Vehículo"}</p></div><Pill variant={transferStatus(transfer.status).variant}>{transferStatus(transfer.status).label}</Pill></div><div className="grid grid-cols-2 gap-3 text-xs"><div><p className="text-[10px] uppercase text-[var(--muted-foreground)]">Vendedor</p><p>{transfer.seller.name || "—"}</p></div><div><p className="text-[10px] uppercase text-[var(--muted-foreground)]">Sucursal</p><p>{transfer.locationName || "—"}</p></div><div><p className="text-[10px] uppercase text-[var(--muted-foreground)]">Valor vehículo</p><p>{fmtCLP(transfer.vehicleValueClp)}</p></div><div><p className="text-[10px] uppercase text-[var(--muted-foreground)]">Servicio</p><p className="font-semibold">{fmtCLP(transfer.serviceFeeClp)}</p></div></div>{canOperate && <TransferStatusAction transferId={transfer.id} status={transfer.status} />}</li>
             ))}</ul>
           </>
         )}

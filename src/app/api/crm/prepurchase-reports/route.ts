@@ -44,6 +44,7 @@ export async function POST(request: Request) {
     plate?: unknown;
     scheduledFor?: unknown;
     notes?: unknown;
+    leadId?: unknown;
   } | null;
   const plate = typeof body?.plate === "string"
     ? body.plate.toUpperCase().replace(/[^A-Z0-9]/g, "")
@@ -61,6 +62,7 @@ export async function POST(request: Request) {
       plate,
       scheduledFor: body.scheduledFor,
       notes: typeof body.notes === "string" ? body.notes.trim() || null : null,
+      leadId: typeof body.leadId === "string" ? body.leadId : null,
     }),
   });
   const data = await upstream.json().catch(() => ({}));
@@ -72,6 +74,8 @@ export async function POST(request: Request) {
       visit_slot_taken: "Ese vehículo ya tiene una visita en el horario seleccionado",
       insufficient_org_role: "No tienes permiso para agendar visitas",
       organization_out_of_scope: "No tienes acceso a esa automotora",
+      lead_not_found: "La solicitud no pertenece a esta automotora",
+      lead_not_assigned_to_you: "Esta solicitud está en la cartera de otro agente",
     };
     return NextResponse.json(
       { error: messages[String(data?.detail)] || "No pudimos agendar la visita" },

@@ -28,6 +28,14 @@ export type Lead = {
   /** Etapa cruda del backend, por si no mapea a ninguna conocida. */
   rawStage: string;
   priority: number;
+  /**
+   * Opportunity Priority Score del motor MIA-CRM: margen esperado por dia ajustado por el
+   * vendedor asignado. `null` cuando el motor todavia no evaluo este lead.
+   */
+  opportunityScore: number | null;
+  /** `validado` cuando el margen sale del costo real de adquisicion; `provisional` cuando
+   *  es una estimacion (R-PRI-02: no se presenta con la misma certeza). */
+  opportunityConfidence: string | null;
   source: string | null;
   contactName: string;
   contactPhone: string | null;
@@ -56,6 +64,8 @@ export type Lead = {
   /** Cuándo entró en la etapa actual. Distinto de `updatedAt`, que cambia con cualquier edición. */
   stageChangedAt: string | null;
   nextActionAt: string | null;
+  /** Qué se prometió, no sólo cuándo: título de esa misma tarea abierta más próxima. */
+  nextActionTitle: string | null;
   lostReason: string | null;
   createdAt: string | null;
   updatedAt: string | null;
@@ -79,6 +89,28 @@ export type LeadActivity = {
   metadata: Record<string, unknown>;
   actorName: string | null;
   createdAt: string | null;
+};
+
+export type LeadVehicleInterest = {
+  id: string;
+  leadId: string;
+  vehicleId: string;
+  label: string;
+  stockNumber: number | null;
+  patent: string | null;
+  year: number | null;
+  price: number | null;
+  mileage: number | null;
+  vehicleStatus: string | null;
+  inventoryLocation: string | null;
+  status: "candidate" | "selected" | "rejected";
+  notes: string | null;
+  testDriveStatus: "not_scheduled" | "scheduled" | "completed" | "cancelled" | "no_show";
+  testDriveScheduledAt: string | null;
+  testDriveCompletedAt: string | null;
+  testDriveNotes: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
 };
 
 /**
@@ -110,6 +142,9 @@ export type BackendCrmLead = {
   id: string;
   stage: string | null;
   priority: number | null;
+  /** Motor MIA-CRM (solo en el listado): OPS y su nivel de confianza. */
+  opportunityScore?: number | null;
+  opportunityConfidence?: string | null;
   source: string | null;
   contactName: string | null;
   contactPhone: string | null;
@@ -133,6 +168,7 @@ export type BackendCrmLead = {
   firstContactedAt: string | null;
   stageChangedAt: string | null;
   nextActionAt: string | null;
+  nextActionTitle?: string | null;
   lostReason: string | null;
   createdAt: string | null;
   updatedAt: string | null;
@@ -151,6 +187,8 @@ export function fromCrmLead(raw: BackendCrmLead): Lead {
     stage: toStage(raw.stage),
     rawStage: raw.stage || "new",
     priority: Number(raw.priority ?? 0),
+    opportunityScore: raw.opportunityScore == null ? null : Number(raw.opportunityScore),
+    opportunityConfidence: raw.opportunityConfidence ?? null,
     source: raw.source,
     contactName: raw.contactName?.trim() || "Sin nombre",
     contactPhone: raw.contactPhone?.trim() || null,
@@ -174,6 +212,7 @@ export function fromCrmLead(raw: BackendCrmLead): Lead {
     firstContactedAt: raw.firstContactedAt,
     stageChangedAt: raw.stageChangedAt ?? null,
     nextActionAt: raw.nextActionAt,
+    nextActionTitle: raw.nextActionTitle?.trim() || null,
     lostReason: raw.lostReason,
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
@@ -257,8 +296,25 @@ export function stageLabel(stage: LeadStage): string {
   return STAGES.find((s) => s.key === stage)?.label ?? stage;
 }
 
+/**
+ * El camino de la venta: las etapas por las que el lead va pasando.
+ *
+ * `won` y `lost` NO son pasos del camino, son cierres — se deciden aparte, una de las dos pide
+ * motivo, y ninguna "sigue" a Documentos. Contarlos como paso hacía que la bandeja dijera
+ * "Paso 4 de 7" mientras la ficha del mismo lead mostraba 4 de 6.
+ *
+ * Fuente única: la bandeja y el stepper de la ficha leen de aquí, no de su propia copia.
+ */
+export const SALES_PATH = STAGES.filter((stage) => stage.key !== "won" && stage.key !== "lost");
+
 /** Etapas que siguen abiertas (el agente todavía tiene algo que hacer). */
-export const OPEN_STAGES: LeadStage[] = ["new", "contacted", "visit", "quoted", "financing", "documents"];
+export const OPEN_STAGES: LeadStage[] = SALES_PATH.map((stage) => stage.key);
+
+/** Dónde va el lead dentro del camino. `null` en los cierres: ya salieron de él. */
+export function stageStep(stage: LeadStage): { index: number; total: number } | null {
+  const index = SALES_PATH.findIndex((item) => item.key === stage);
+  return index < 0 ? null : { index, total: SALES_PATH.length };
+}
 
 export function isOpen(lead: Lead): boolean {
   return OPEN_STAGES.includes(lead.stage);
@@ -274,6 +330,10 @@ export function normalizeLead(raw: BackendLead): Lead {
     stage: toStage(raw.stage),
     rawStage: raw.stage || "new",
     priority: Number(raw.priority ?? 0),
+    // `/backoffice/team` no calcula el OPS (es otro endpoint, sin el join al motor): se
+    // deja explicitamente en null en vez de fingir un 0, que se leeria como "sin valor".
+    opportunityScore: null,
+    opportunityConfidence: null,
     source: raw.source,
     // Preferimos los campos de contacto sueltos (el cliente de automotora no tiene cuenta) y
     // caemos al perfil del comprador cuando el lead sí vino de un usuario registrado.
@@ -299,6 +359,7 @@ export function normalizeLead(raw: BackendLead): Lead {
     firstContactedAt: null,
     stageChangedAt: null,
     nextActionAt: null,
+    nextActionTitle: null,
     lostReason: null,
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
@@ -349,6 +410,7 @@ export const SOURCE_LABEL: Record<string, string> = {
   platform: "Ficha del vehículo",
   web: "Sitio web",
   mia: "MIA",
+  mia_chat: "MIA (chat)",
   whatsapp: "WhatsApp",
   phone: "Llamada entrante",
   walk_in: "Visita al local",

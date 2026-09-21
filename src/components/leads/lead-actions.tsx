@@ -17,7 +17,7 @@ import { CalendarCheck, Check, Loader2, MessageSquare, PhoneOff } from "lucide-r
 import { toast } from "sonner";
 
 import { crmErrorMessage, crmFetch } from "@/lib/api/crm-fetch";
-import type { LeadStage } from "@/lib/leads";
+import { OPEN_STAGES, type LeadStage } from "@/lib/leads";
 
 const QUICK_RESULTS: {
   key: string;
@@ -73,9 +73,8 @@ export function LeadActions({
   const registerResult = async (result: (typeof QUICK_RESULTS)[number]) => {
     setBusy(result.key);
     try {
-      const openStages: LeadStage[] = ["new", "contacted", "visit", "quoted", "financing", "documents"];
-      const currentIndex = openStages.indexOf(currentStage);
-      const targetIndex = result.stage ? openStages.indexOf(result.stage) : -1;
+      const currentIndex = OPEN_STAGES.indexOf(currentStage);
+      const targetIndex = result.stage ? OPEN_STAGES.indexOf(result.stage) : -1;
       const impliedStage = targetIndex > currentIndex && currentIndex >= 0 ? result.stage : undefined;
       await register(
         {

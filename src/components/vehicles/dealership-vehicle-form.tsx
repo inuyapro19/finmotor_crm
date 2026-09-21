@@ -138,6 +138,8 @@ type FormState = {
   salePrice: string;
   status: string;
   description: string;
+  financingAvailable: boolean;
+  salePriority: boolean;
   kind: string;
   ownerName: string;
   ownerRut: string;
@@ -181,7 +183,7 @@ function normalizeFuel(value: string | null | undefined) {
 
 function initialState(
   vehicle?: VehicleDetail,
-  acquisition?: Acquisition | null,
+  acquisition?: Partial<Acquisition> | null,
   locations: OrganizationLocation[] = [],
 ): FormState {
   const defaultLocation = locations.find((location) => location.isMain && location.isActive)
@@ -202,6 +204,8 @@ function initialState(
     salePrice: vehicle?.price != null ? String(vehicle.price) : "",
     status: vehicle?.status ?? "DRAFT",
     description: vehicle?.description ?? "",
+    financingAvailable: vehicle?.financingAvailable ?? false,
+    salePriority: vehicle?.salePriority ?? false,
     kind: acquisition?.kind ?? "purchase",
     ownerName: acquisition?.ownerName ?? "",
     ownerRut: acquisition?.ownerRut ?? "",
@@ -232,9 +236,11 @@ export function DealershipVehicleForm({
   acquisition,
   locations,
   preparation,
+  sourcingOpportunityId,
 }: {
   vehicle?: VehicleDetail;
-  acquisition?: Acquisition | null;
+  acquisition?: Partial<Acquisition> | null;
+  sourcingOpportunityId?: string;
   locations: OrganizationLocation[];
   preparation?: VehiclePreparation | null;
 }) {
@@ -371,6 +377,7 @@ export function DealershipVehicleForm({
         keysCount: Number(checklistState(acquisition?.intakeChecklist).keysCount || 0),
       });
     const payload = {
+      sourcingOpportunityId,
       vehicle: {
         patent: form.patent,
         brand: form.brand.trim(),
@@ -387,6 +394,8 @@ export function DealershipVehicleForm({
         doors: asNumber(form.doors),
         description: form.description.trim() || undefined,
         status: form.status,
+        financingAvailable: form.financingAvailable,
+        salePriority: form.salePriority,
       },
       acquisition: {
         kind: form.kind,
@@ -669,6 +678,20 @@ export function DealershipVehicleForm({
               </div>
               <FormField label="Precio de venta (CLP)" required><input type="number" min={1} value={form.salePrice} onChange={(e) => update("salePrice", e.target.value)} className={fieldInputClass} /></FormField>
               <FormField label="Estado"><select value={form.status} onChange={(e) => update("status", e.target.value)} className={fieldInputClass}>{STATUSES.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}</select></FormField>
+              <label className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 ${form.financingAvailable ? "border-[var(--primary)] bg-[var(--accent)]" : "border-[var(--border)] bg-white"}`}>
+                <input type="checkbox" checked={form.financingAvailable} onChange={(e) => update("financingAvailable", e.target.checked)} className="h-4 w-4 accent-[var(--primary)]" />
+                <span>
+                  <span className="block text-xs font-semibold">Se vende con financiamiento</span>
+                  <span className="text-[10px] text-[var(--muted-foreground)]">Muestra la cuota estimada de esta unidad en el marketplace.</span>
+                </span>
+              </label>
+              <label className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 ${form.salePriority ? "border-amber-400 bg-amber-50" : "border-[var(--border)] bg-white"}`}>
+                <input type="checkbox" checked={form.salePriority} onChange={(e) => update("salePriority", e.target.checked)} className="h-4 w-4 accent-amber-500" />
+                <span>
+                  <span className="block text-xs font-semibold">Prioridad de venta</span>
+                  <span className="text-[10px] text-[var(--muted-foreground)]">MIA la recomienda primero al comparar vehículos que calzan igual de bien con el comprador (stock antiguo, campaña, exceso de inventario).</span>
+                </span>
+              </label>
             </div>
           </Panel>}
 

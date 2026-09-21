@@ -32,6 +32,7 @@ export async function POST(request: Request) {
 
 export function acquisitionError(detail: unknown): string {
   const map: Record<string, string> = {
+    acquisition_linked_to_sourcing: "Este ingreso conserva el vínculo con una captación recibida y no se puede eliminar",
     owner_name_required: "Falta el nombre de quien entrega el auto",
     plate_required: "Falta la patente del vehículo",
     min_price_required: "Falta el precio mínimo autorizado por el dueño",

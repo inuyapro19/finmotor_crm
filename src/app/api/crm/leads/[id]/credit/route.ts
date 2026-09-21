@@ -18,7 +18,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
   const { id } = await params;
 
-  let body: { termMonths?: number; downPayment?: number; rut?: string; notes?: string };
+  let body: { termMonths?: number; downPayment?: number; rut?: string; contactEmail?: string; notes?: string };
   try {
     body = await request.json();
   } catch {
@@ -32,6 +32,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       termMonths: body.termMonths,
       downPayment: body.downPayment ?? null,
       rut: body.rut?.trim() || null,
+      contactEmail: body.contactEmail?.trim() || null,
       notes: body.notes?.trim() || null,
     }),
   });

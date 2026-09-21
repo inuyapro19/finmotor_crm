@@ -3,6 +3,7 @@ import { clsx } from "clsx";
 
 import { fmtCLP, fmtDateTime } from "@/lib/format";
 import { isActionOverdue, leadFinancingGap, leadValue, stageLabel, type Lead } from "@/lib/leads";
+import type { SaleTerms } from "@/lib/data/crm";
 import { LeadPipeline } from "@/components/leads/lead-pipeline";
 
 /**
@@ -12,10 +13,22 @@ import { LeadPipeline } from "@/components/leads/lead-pipeline";
  * Va antes que las pestañas a propósito: la etapa no es "una sección más", es el marco que da
  * sentido a todo lo demás.
  */
-export function LeadSummary({ lead, canWrite }: { lead: Lead; canWrite: boolean }) {
+export function LeadSummary({
+  lead,
+  sale,
+  canWrite,
+}: {
+  lead: Lead;
+  sale: SaleTerms;
+  canWrite: boolean;
+}) {
   const value = leadValue(lead);
   const gap = leadFinancingGap(lead);
   const overdue = isActionOverdue(lead);
+  // "Por financiar" es el hueco de la COTIZACION, y se mostraba siempre -- incluso con el
+  // credito ya rechazado, donde la venta pasó a ser al contado. Deciamos "por financiar
+  // $10.500.000" arriba y "total a cobrar $14.000.000" abajo, en la misma pantalla.
+  const showsFinancingGap = sale.financed && gap > 0 && value !== null;
 
   return (
     <section className="mb-4 overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--card)]">
@@ -44,7 +57,7 @@ export function LeadSummary({ lead, canWrite }: { lead: Lead; canWrite: boolean 
           icon={Car}
           label="Unidad"
           value={lead.vehicleId ? lead.vehicleLabel : "Sin elegir"}
-          hint={lead.vehiclePatent ?? (lead.vehicleId ? undefined : "Elígela en Cotización")}
+          hint={lead.vehiclePatent ?? (lead.vehicleId ? undefined : "Compara alternativas en Vehículos")}
         />
         <Metric
           icon={Tag}
@@ -60,15 +73,37 @@ export function LeadSummary({ lead, canWrite }: { lead: Lead; canWrite: boolean 
         />
         <Metric
           icon={Banknote}
-          label="Por financiar"
-          value={gap > 0 && value !== null ? fmtCLP(gap) : "—"}
-          hint={lead.quotedDownPayment ? `Pie ${fmtCLP(lead.quotedDownPayment)}` : undefined}
+          label={showsFinancingGap ? "Por financiar" : "A cobrar"}
+          value={
+            showsFinancingGap
+              ? fmtCLP(gap)
+              : sale.amountDueClp > 0
+                ? fmtCLP(sale.amountDueClp)
+                : "—"
+          }
+          hint={
+            showsFinancingGap
+              ? lead.quotedDownPayment
+                ? `Pie ${fmtCLP(lead.quotedDownPayment)}`
+                : undefined
+              : sale.financeStatus === "rejected"
+                ? "Crédito rechazado: al contado"
+                : undefined
+          }
         />
+        {/* El QUE arriba y el CUANDO de apoyo, igual que el panel "Próximo paso" de la
+            pestaña Gestión: los dos salen de la misma tarea abierta más próxima. */}
         <Metric
           icon={CalendarClock}
           label="Próximo paso"
-          value={lead.nextActionAt ? fmtDateTime(lead.nextActionAt) : "Sin agendar"}
-          hint={overdue ? "Vencido" : undefined}
+          value={lead.nextActionTitle ?? (lead.nextActionAt ? fmtDateTime(lead.nextActionAt) : "Sin agendar")}
+          hint={
+            lead.nextActionAt && lead.nextActionTitle
+              ? `${fmtDateTime(lead.nextActionAt)}${overdue ? " · vencido" : ""}`
+              : overdue
+                ? "Vencido"
+                : undefined
+          }
           tone={overdue ? "alert" : "neutral"}
         />
       </dl>

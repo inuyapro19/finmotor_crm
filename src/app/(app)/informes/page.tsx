@@ -29,6 +29,9 @@ const BILLING_LABEL: Record<string, string> = {
   unbilled: "No facturado",
   pending: "Pendiente de facturación",
   invoiced: "Facturado",
+  // Los dos que faltaban del CHECK de la migracion 0035: se mostraban en crudo.
+  not_billable: "No facturable",
+  not_applicable: "Sin facturación",
 };
 
 const TYPE_LABEL: Record<ReportType, string> = {
