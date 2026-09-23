@@ -59,6 +59,15 @@ export type LeadIntelligence = {
   processPath: ProcessPath | null;
 };
 
+export type SellerCoaching = {
+  dimension: string;
+  score: number;
+  sampleSize: number;
+  action: string;
+  confidence: string;
+  evidence: string;
+};
+
 /**
  * La Inteligencia MIA es UNA pestaña de la ficha, no la ficha.
  *
@@ -110,4 +119,19 @@ export async function getLeadIntelligence(leadId: string): Promise<LeadIntellige
     opportunityPriority: opsRes?.opportunityPriority ?? null,
     processPath: pathRes ? { timeline: pathRes.timeline, flags: pathRes.flags, matches_high_conversion_pattern: pathRes.matches_high_conversion_pattern, current_stage: pathRes.current_stage } : null,
   };
+}
+
+/**
+ * El foco de coaching del propio agente (Modelo 05, Parte 09).
+ *
+ * Va en su tablero y no en la ficha del lead a propósito: es un promedio de su historial,
+ * y puesto junto a la siguiente acción de un cliente se leería como un reproche sobre esa
+ * conversación. `null` cuando todavía no hay muestra suficiente para concluir nada.
+ */
+export async function getSellerCoaching(sellerId: string): Promise<SellerCoaching | null> {
+  const response = await panel(
+    backendJsonOrNull<{ ok: boolean; coaching: SellerCoaching | null }>(`/mia-crm/sellers/${sellerId}/score`),
+    "el foco de coaching del agente",
+  );
+  return response?.coaching ?? null;
 }

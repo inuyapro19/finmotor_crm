@@ -17,6 +17,7 @@ import { LeadFunnelChart } from "@/components/dashboard/lead-funnel-chart";
 import { LeadTrendChart } from "@/components/dashboard/lead-trend-chart";
 import { MonthlySalesChart } from "@/components/dashboard/monthly-sales-chart";
 import { SalesDateFilter } from "@/components/dashboard/sales-date-filter";
+import { SellerCoachingPanel } from "@/components/dashboard/seller-coaching";
 import { Notice, PageHeader, Panel } from "@/components/ui/primitives";
 import { requireCrmSession, type CrmSession } from "@/lib/auth/session";
 import {
@@ -76,6 +77,10 @@ export default async function DashboardPage({
       />
 
       <SalesDateFilter from={from} to={to} />
+
+      {/* Se dibuja solo si MIA tiene muestra suficiente sobre quien está mirando: a un dueño
+          que no vende no le aparece nada, sin necesidad de preguntarle el rol. */}
+      <SellerCoachingPanel sellerId={session.userId} />
 
       {session.portfolioRestricted ? (
         <AgentDashboard session={session} from={from} to={to} periodHint={periodHint} />

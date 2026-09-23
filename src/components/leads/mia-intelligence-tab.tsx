@@ -3,6 +3,7 @@ import { fmtCLP, fmtDateTime } from "@/lib/format";
 import { describeMilestone } from "@/lib/activity-vocabulary";
 import type { ClosingScore, DecisionSignal, LeadIntelligence, OpportunityPriority } from "@/lib/data/mia-crm";
 import { MarginCheckCalculator } from "./margin-check-calculator";
+import { MiaRecommendations } from "./mia-recommendations";
 
 /**
  * Pestaña "Inteligencia MIA" — lo que el motor mia_crm sabe de este lead, dicho para quien
@@ -325,6 +326,7 @@ export function MiaIntelligenceTab({
 }) {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
+      <MiaRecommendations leadId={leadId} />
       <ClosingScorePanel closing={intelligence.closingScore} />
       <OpportunityPriorityPanel priority={intelligence.opportunityPriority} />
       <DecisionSignalsPanel signals={intelligence.signals} nextBestQuestion={intelligence.nextBestQuestion} />
