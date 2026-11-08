@@ -7,8 +7,9 @@ import type { NextConfig } from "next";
  * fuente es el backend FastAPI a través del BFF (route handlers de `src/app/api`). Por eso
  * `connect-src` sólo necesita 'self' y el host del API en producción.
  *
- * Las fotos de vehículos vienen de MinIO (dev: localhost:9098, prod: api.finmotor.cl), igual
- * que en el frontend-web. Si se agrega otro host de imágenes hay que sumarlo a `img-src`
+ * Las fotos de vehículos vienen de MinIO (dev: localhost:9098, prod: api.finmotor.cl) o de
+ * Azure Blob (preproducción en Azure, NEXT_PUBLIC_BLOB_ORIGIN), igual que en el frontend-web.
+ * Si se agrega otro host de imágenes hay que sumarlo a `img-src`
  * Y a `remotePatterns`, o next/image responde 400.
  */
 const isProduction = process.env.NODE_ENV === "production";
@@ -24,6 +25,11 @@ const mediaOrigin = configuredOrigin(
   process.env.NEXT_PUBLIC_MEDIA_ORIGIN,
   "http://localhost:9098",
 );
+// Azure Blob (preproducción en Azure): con STORAGE_BACKEND=azure el backend firma las subidas
+// y guarda fotos/documentos en la cuenta de Storage. Origen exacto, no *.blob.core.windows.net.
+const blobOrigin = new URL(
+  process.env.NEXT_PUBLIC_BLOB_ORIGIN?.trim() || "https://finmotorstv5z7viurqsaqg.blob.core.windows.net",
+).origin;
 const apiOrigin = configuredOrigin(
   "NEXT_PUBLIC_API_ORIGIN",
   process.env.NEXT_PUBLIC_API_ORIGIN,
@@ -31,6 +37,7 @@ const apiOrigin = configuredOrigin(
 );
 
 const nextConfig: NextConfig = {
+  distDir: process.env.FINMOTOR_DEMO_MODE === "true" ? ".next-demo" : ".next",
   output: "standalone",
   images: {
     // Next sirve las imágenes optimizadas con `Content-Disposition: attachment` por defecto
@@ -45,6 +52,7 @@ const nextConfig: NextConfig = {
         hostname: new URL(mediaOrigin).hostname,
         port: new URL(mediaOrigin).port || undefined,
       },
+      { protocol: "https", hostname: new URL(blobOrigin).hostname },
     ],
   },
   async headers() {
@@ -52,6 +60,11 @@ const nextConfig: NextConfig = {
       {
         source: "/(.*)",
         headers: [
+          ...(process.env.FINMOTOR_DEMO_MODE === "true" ? [
+            { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
+            { key: "X-Finmotor-Environment", value: "demo" },
+            { key: "Cache-Control", value: "no-store" },
+          ] : []),
           { key: "X-Frame-Options", value: "DENY" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
@@ -60,8 +73,8 @@ const nextConfig: NextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              `img-src 'self' data: blob: ${mediaOrigin}`,
-              `connect-src 'self' ${apiOrigin} ${mediaOrigin}`,
+              `img-src 'self' data: blob: ${mediaOrigin} ${blobOrigin}`,
+              `connect-src 'self' ${apiOrigin} ${mediaOrigin} ${blobOrigin}`,
               `script-src 'self' 'unsafe-inline'${isProduction ? "" : " 'unsafe-eval'"}`,
               "style-src 'self' 'unsafe-inline'",
               "font-src 'self' data:",

@@ -3,10 +3,8 @@
 /**
  * Canales de publicación de la automotora.
  *
- * Estado actual: se guarda la conexión (identificador de vendedor y credenciales), pero
- * **todavía no se publica**. El envío real del stock a Chileautos es el paso siguiente y
- * está descrito en el plan; aquí se deja preparada la conexión para no pedirle al usuario
- * sus credenciales el día del despliegue.
+ * La conexión habilita el worker de publicación. Con publicación automática activa, cada
+ * unidad que pase a estado Publicado se sincroniza con el canal configurado.
  *
  * Las credenciales viajan al backend y no vuelven nunca: sólo se muestra si el canal ya tiene
  * credenciales cargadas.
@@ -203,8 +201,8 @@ function ChannelRow({
           </label>
 
           <p className="text-[11px] leading-relaxed text-[var(--muted-foreground)]">
-            Guardamos la conexión, pero el envío del stock a este canal todavía no está
-            activo. Cuando lo esté, tus autos se publicarán con la patente como identificador.
+            Con publicación automática, las unidades en estado Publicado se enviarán a este
+            canal. La patente y las fotos deben cumplir los requisitos del proveedor.
           </p>
 
           <div className="flex flex-wrap gap-2">

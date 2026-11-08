@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   ArrowLeft,
   ArrowRight,
+  Coins,
   Download,
   FileClock,
   FilePlus2,
@@ -11,7 +12,7 @@ import {
 
 import { EmptyState, Notice, PageHeader, Panel, Pill, StatCard } from "@/components/ui/primitives";
 import { canWrite, requireCrmSession } from "@/lib/auth/session";
-import { getReports, type HistoricalReport, type ReportType } from "@/lib/data/crm";
+import { getReportWallet, getReports, type HistoricalReport, type ReportType } from "@/lib/data/crm";
 import { fmtDateTime, fmtNumber, fmtPlate } from "@/lib/format";
 import { ReportShareAction } from "@/components/reports/report-share-action";
 import { ReportsStatusPoller } from "@/components/reports/reports-status-poller";
@@ -32,6 +33,7 @@ const BILLING_LABEL: Record<string, string> = {
   // Los dos que faltaban del CHECK de la migracion 0035: se mostraban en crudo.
   not_billable: "No facturable",
   not_applicable: "Sin facturación",
+  prepaid: "Pagado con tokens",
 };
 
 const TYPE_LABEL: Record<ReportType, string> = {
@@ -40,6 +42,7 @@ const TYPE_LABEL: Record<ReportType, string> = {
 };
 
 type Filters = {
+  stock?: string;
   status?: string;
   billingStatus?: string;
   reportType?: string;
@@ -63,7 +66,33 @@ function billingVariant(status: string) {
   const value = normalized(status);
   if (value === "invoiced") return "info" as const;
   if (value === "unbilled") return "warn" as const;
+  if (value === "prepaid") return "success" as const;
   return "neutral" as const;
+}
+
+function stockFilter(value: string | undefined): "in" | "out" | undefined {
+  return value === "in" || value === "out" ? value : undefined;
+}
+
+function stockCode(value: number | null) {
+  return value == null ? null : `STK-${String(value).padStart(6, "0")}`;
+}
+
+/** Patente del informe vs stock: unidad vigente, unidad ya vendida o consulta externa. */
+function StockBadge({ stock }: { stock: HistoricalReport["stock"] }) {
+  if (!stock) return <Pill variant="neutral">Fuera del stock</Pill>;
+  const sold = stock.status === "SOLD";
+  const code = stockCode(stock.stockNumber);
+  return (
+    <Link
+      href={`/vehiculos/editar/${encodeURIComponent(stock.vehicleId)}`}
+      title={sold ? "Unidad del stock ya vendida" : "Ver la unidad en el stock"}
+      className="inline-flex flex-col items-start gap-0.5 hover:opacity-80"
+    >
+      <Pill variant={sold ? "info" : "success"}>{sold ? "Del stock · vendido" : "En stock"}</Pill>
+      {code && <span className="font-mono text-[10px] text-[var(--muted-foreground)]">{code}</span>}
+    </Link>
+  );
 }
 
 function reportType(value: string | undefined): ReportType | undefined {
@@ -72,6 +101,7 @@ function reportType(value: string | undefined): ReportType | undefined {
 
 function pageHref(filters: Filters, page: number) {
   const params = new URLSearchParams();
+  if (filters.stock) params.set("stock", filters.stock);
   if (filters.status) params.set("status", filters.status);
   if (filters.billingStatus) params.set("billingStatus", filters.billingStatus);
   if (filters.reportType) params.set("reportType", filters.reportType);
@@ -89,6 +119,7 @@ export default async function ReportsPage({
   const filters = await searchParams;
   const session = await requireCrmSession();
   const page = Math.max(1, Number(filters.page) || 1);
+  const walletPromise = getReportWallet(session.dealership.id);
   const result = await getReports(session.dealership.id, {
     page,
     limit: 25,
@@ -97,8 +128,11 @@ export default async function ReportsPage({
     status: filters.status,
     billingStatus: filters.billingStatus,
     reportType: reportType(filters.reportType),
+    stock: stockFilter(filters.stock),
   });
   const summary = result.summary;
+  const wallet = await walletPromise;
+  const prepaid = wallet?.billingMode === "prepaid";
   const hasProcessingReports = result.reports.some((report) =>
     ["queued", "processing"].includes(normalized(report.status)),
   );
@@ -110,15 +144,26 @@ export default async function ReportsPage({
         title="Informes históricos"
         subtitle="Historial de solicitudes de toda la automotora."
         action={
-          canWrite(session.role) ? (
-            <Link
-              href="/informes/create"
-              className="flex items-center gap-1.5 rounded-[var(--radius-md)] bg-[var(--primary)] px-3.5 py-2 text-sm font-medium text-white"
-            >
-              <FilePlus2 className="h-4 w-4" />
-              Solicitar lote
-            </Link>
-          ) : undefined
+          <div className="flex flex-wrap items-center gap-2">
+            {wallet?.enabled && (
+              <Link
+                href="/informes/tokens"
+                className="flex items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--card)] px-3.5 py-2 text-sm font-medium"
+              >
+                <Coins className="h-4 w-4" />
+                {fmtNumber(wallet.balance)} {wallet.balance === 1 ? "token" : "tokens"} · Comprar tokens
+              </Link>
+            )}
+            {canWrite(session.role) && (
+              <Link
+                href="/informes/create"
+                className="flex items-center gap-1.5 rounded-[var(--radius-md)] bg-[var(--primary)] px-3.5 py-2 text-sm font-medium text-white"
+              >
+                <FilePlus2 className="h-4 w-4" />
+                Solicitar lote
+              </Link>
+            )}
+          </div>
         }
       />
 
@@ -127,21 +172,46 @@ export default async function ReportsPage({
           <Notice tone="warn">{result.error}</Notice>
         </div>
       ) : (
-        <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+        <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
           <StatCard label="Generados" value={fmtNumber(summary.generated)} />
+          <StatCard
+            label="Del stock / fuera del stock"
+            value={`${fmtNumber(summary.inStock)} / ${fmtNumber(summary.outOfStock)}`}
+            hint="Patentes que coinciden con tu stock"
+          />
           <StatCard label="Estándar" value={fmtNumber(summary.standard)} hint="1 token por informe" />
           <StatCard label="Premium" value={fmtNumber(summary.premium)} hint="2 tokens por informe" />
           <StatCard label="Tokens usados" value={fmtNumber(summary.tokens)} />
-          <StatCard
-            label="No facturados / facturados"
-            value={`${fmtNumber(summary.unbilled)} / ${fmtNumber(summary.invoiced)}`}
-            tone={summary.unbilled > 0 ? "alert" : "neutral"}
-          />
+          {prepaid ? (
+            <StatCard
+              label="Saldo de tokens"
+              value={fmtNumber(wallet?.balance ?? 0)}
+              hint="Recarga en Comprar tokens"
+              href="/informes/tokens"
+              tone={(wallet?.balance ?? 0) === 0 ? "alert" : "neutral"}
+            />
+          ) : (
+            <StatCard
+              label="No facturados / facturados"
+              value={`${fmtNumber(summary.unbilled)} / ${fmtNumber(summary.invoiced)}`}
+              tone={summary.unbilled > 0 ? "alert" : "neutral"}
+            />
+          )}
         </div>
       )}
 
       <Panel className="mb-4">
-        <form action="/informes" className="grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_155px_155px_auto]">
+        <form action="/informes" className="grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_155px_155px_auto]">
+          <select
+            name="stock"
+            defaultValue={filters.stock ?? ""}
+            aria-label="Stock"
+            className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--card)] px-3 py-2.5 text-sm"
+          >
+            <option value="">Stock y externas</option>
+            <option value="in">Del stock</option>
+            <option value="out">Fuera del stock</option>
+          </select>
           <select
             name="status"
             defaultValue={filters.status ?? ""}
@@ -163,6 +233,7 @@ export default async function ReportsPage({
             <option value="">Toda facturación</option>
             <option value="unbilled">No facturado</option>
             <option value="invoiced">Facturado</option>
+            <option value="prepaid">Pagado con tokens</option>
           </select>
           <select
             name="reportType"
@@ -216,10 +287,11 @@ export default async function ReportsPage({
         ) : (
           <>
             <div className="hidden overflow-x-auto lg:block">
-              <table className="w-full min-w-[1160px] border-collapse text-left text-xs">
+              <table className="w-full min-w-[1260px] border-collapse text-left text-xs">
                 <thead className="bg-[var(--muted)]/60 text-[10px] uppercase tracking-wide text-[var(--muted-foreground)]">
                   <tr>
                     <th className="px-4 py-3">Patente</th>
+                    <th className="px-3 py-3">Stock</th>
                     <th className="px-3 py-3">Tipo</th>
                     <th className="px-3 py-3">Estado</th>
                     <th className="px-3 py-3">Facturación</th>
@@ -283,6 +355,7 @@ function ReportTableRow({ report }: { report: HistoricalReport }) {
   return (
     <tr className="transition-colors hover:bg-[var(--muted)]/30">
       <td className="px-4 py-3 font-mono text-sm font-semibold">{fmtPlate(report.plate)}</td>
+      <td className="px-3 py-3"><StockBadge stock={report.stock} /></td>
       <td className="px-3 py-3 font-medium">{TYPE_LABEL[report.reportType] ?? report.reportType}</td>
       <td className="px-3 py-3"><Pill variant={statusVariant(status)}>{status === "processing" && <Loader2 className="h-3 w-3 animate-spin" />}{STATUS_LABEL[status] ?? report.status}</Pill></td>
       <td className="px-3 py-3"><Pill variant={billingVariant(billing)}>{BILLING_LABEL[billing] ?? report.billingStatus}</Pill></td>
@@ -331,7 +404,8 @@ function ReportCard({ report }: { report: HistoricalReport }) {
           </a></div>
         )}
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-start gap-2">
+        <StockBadge stock={report.stock} />
         <Pill variant={statusVariant(status)}>{status === "processing" && <Loader2 className="h-3 w-3 animate-spin" />}{STATUS_LABEL[status] ?? report.status}</Pill>
         <Pill variant={billingVariant(billing)}>{BILLING_LABEL[billing] ?? report.billingStatus}</Pill>
       </div>

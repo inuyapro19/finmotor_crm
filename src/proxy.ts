@@ -15,8 +15,7 @@ import { requiredServerEnv } from "@/lib/env";
 // Nombres propios del CRM (no "fm-access"/"fm-refresh"): evita que la sesión colisione con
 // frontend-web/frontend-backoffice en localhost, donde el puerto no aísla cookies (ver
 // el comentario en src/lib/api/client.ts).
-const ACCESS_COOKIE = "fm-crm-access";
-const REFRESH_COOKIE = "fm-crm-refresh";
+import { ACCESS_COOKIE, REFRESH_COOKIE } from "@/lib/auth/cookies";
 
 /** Margen para renovar antes de que el token expire de verdad. */
 const EXPIRY_SKEW_SECONDS = 60;
@@ -56,13 +55,29 @@ function setSessionCookies(res: NextResponse, accessToken: string, refreshToken:
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // El login gestiona sus propias cookies; no tiene sentido renovar allí.
-  if (pathname.startsWith("/login") || pathname.startsWith("/api/auth/")) {
+  // Login y recuperación de contraseña son pantallas sin sesión: no tiene sentido renovar allí.
+  if (
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/recuperar-clave") ||
+    pathname.startsWith("/restablecer-clave") ||
+    pathname.startsWith("/api/auth/")
+  ) {
     return NextResponse.next();
   }
 
   const access = request.cookies.get(ACCESS_COOKIE)?.value;
   const refresh = request.cookies.get(REFRESH_COOKIE)?.value;
+
+  // Enlace compartido del marketplace mayorista (p. ej. /mayorista?proveedor=…) abierto sin
+  // sesión: al login con returnTo, para volver al mismo stock filtrado después de entrar.
+  if (
+    !access && !refresh && pathname.startsWith("/mayorista") && request.method === "GET" &&
+    request.headers.get("sec-fetch-dest") === "document"
+  ) {
+    const login = new URL("/login", request.url);
+    login.searchParams.set("returnTo", `${pathname}${request.nextUrl.search}`);
+    return NextResponse.redirect(login);
+  }
 
   if (!needsRefresh(access)) return NextResponse.next();
 

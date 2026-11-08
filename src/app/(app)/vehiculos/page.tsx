@@ -1,3 +1,4 @@
+import { commissionValue } from "@/lib/commission";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
@@ -120,7 +121,7 @@ function daysInStock(vehicle: VehicleRow): number {
 function estimatedMargin(vehicle: VehicleRow): number | null {
   if (vehicle.price == null) return null;
   if (vehicle.acquisitionKind === "purchase" && vehicle.purchasePrice != null) return vehicle.price - vehicle.purchasePrice;
-  if (vehicle.acquisitionKind === "consignment" && vehicle.commissionPct != null) return Math.round(vehicle.price * vehicle.commissionPct / 100);
+  if (vehicle.acquisitionKind === "consignment") return commissionValue(vehicle, vehicle.price);
   if (vehicle.acquisitionKind === "trade_in" && vehicle.minPrice != null) return vehicle.price - vehicle.minPrice;
   return null;
 }
@@ -153,10 +154,19 @@ function pageHref(params: VehicleSearchParams, page: number) {
   return queryHref(params, { page: String(page) });
 }
 
-/** URL absoluta de la ficha pública en el marketplace de frontend-web (mismo id que usa el CRM). */
-function marketplaceHref(vehicleId: string) {
+/** URL pública del aviso; el UUID queda reservado a los flujos internos. */
+function marketplaceHref(vehicle: VehicleRow) {
   const webAppUrl = process.env.WEB_APP_URL ?? "http://localhost:3000";
-  return new URL(`/vehiculos/${vehicleId}`, webAppUrl).toString();
+  const brand = (vehicle.publicBrand || "vehiculo")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "") || "vehiculo";
+  const path = vehicle.publicationCode
+    ? `/vehiculos/ficha/${brand}/${vehicle.publicationCode}`
+    : `/vehiculos/${vehicle.id}`;
+  return new URL(path, webAppUrl).toString();
 }
 
 function exportHref(params: VehicleSearchParams) {
@@ -381,7 +391,7 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
                     <td className={`${GRID_CELL} max-w-[155px] overflow-hidden text-ellipsis font-mono`} title={vehicle.vin ?? undefined}>{vehicle.vin || "—"}</td>
                     <td className={`${GRID_CELL} sticky right-0 z-10 bg-inherit`}>
                       <div className="flex justify-center gap-1">
-                        <a href={marketplaceHref(vehicle.id)} target="_blank" rel="noopener noreferrer" aria-label={`Ver ficha de ${vehicle.patent} en el marketplace`} title="Ver ficha en el marketplace" className="inline-flex rounded-md border border-[var(--border)] bg-white p-2 hover:border-[var(--primary)]"><ExternalLink className="h-3.5 w-3.5" /></a>
+                        <a href={marketplaceHref(vehicle)} target="_blank" rel="noopener noreferrer" aria-label={`Ver ficha de ${vehicle.patent} en el marketplace`} title={vehicle.publicationCode ? `Ver ficha ${vehicle.publicationCode} en el marketplace` : "Ver ficha en el marketplace"} className="inline-flex rounded-md border border-[var(--border)] bg-white p-2 hover:border-[var(--primary)]"><ExternalLink className="h-3.5 w-3.5" /></a>
                         {vehicle.acquisitionId && <a href={`/api/crm/acquisitions/${vehicle.acquisitionId}/contract`} target="_blank" rel="noopener noreferrer" aria-label={`Contrato ${vehicle.patent}`} title="Ver contrato" className="inline-flex rounded-md border border-[var(--border)] bg-white p-2 hover:border-[var(--primary)]"><FileText className="h-3.5 w-3.5" /></a>}
                         {vehicle.acquisitionId && <a href={`/api/crm/acquisitions/${vehicle.acquisitionId}/inspection`} target="_blank" rel="noopener noreferrer" aria-label={`Inspección ${vehicle.patent}`} title="Imprimir inspección" className="inline-flex rounded-md border border-[var(--border)] bg-white p-2 hover:border-[var(--primary)]"><ClipboardCheck className="h-3.5 w-3.5" /></a>}
                         {canEdit && <Link href={`/vehiculos/editar/${vehicle.id}`} aria-label={`Editar ${vehicle.patent}`} title="Editar vehículo" className="inline-flex rounded-md border border-[var(--border)] bg-white p-2 hover:border-[var(--primary)]"><Pencil className="h-3.5 w-3.5" /></Link>}

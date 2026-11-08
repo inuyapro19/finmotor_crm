@@ -1,4 +1,5 @@
 import { crmErrorMessage, crmFetch } from "@/lib/api/crm-fetch";
+import { directUploadHeaders } from "@/lib/storage/direct-upload";
 
 const MAX_SIZE_MB = 5;
 const COMPRESS_MAX_DIMENSION = 1920;
@@ -14,8 +15,11 @@ export function isValidPhoto(file: File): string | null {
   return null;
 }
 
-async function compressImage(file: File): Promise<File> {
-  if (file.size <= COMPRESS_TRIGGER_BYTES || typeof createImageBitmap === "undefined") return file;
+export async function compressImage(file: File): Promise<File> {
+  // Chileautos sólo acepta JPG/JPEG. Conservamos un JPEG pequeño tal cual; PNG/WebP y
+  // fotografías grandes se normalizan a JPEG antes de guardarlas en el inventario.
+  if (file.type === "image/jpeg" && file.size <= COMPRESS_TRIGGER_BYTES) return file;
+  if (typeof createImageBitmap === "undefined") return file;
   try {
     const bitmap = await createImageBitmap(file);
     const scale = Math.min(1, COMPRESS_MAX_DIMENSION / Math.max(bitmap.width, bitmap.height));
@@ -24,13 +28,18 @@ async function compressImage(file: File): Promise<File> {
     const canvas = Object.assign(document.createElement("canvas"), { width, height });
     const context = canvas.getContext("2d");
     if (!context) return file;
+    // JPEG no admite transparencia. Fondo blanco evita que un PNG transparente quede negro.
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, width, height);
     context.drawImage(bitmap, 0, 0, width, height);
     bitmap.close();
-    const outputType = file.type === "image/png" ? "image/png" : "image/webp";
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, outputType, COMPRESS_QUALITY));
-    if (!blob || blob.size >= file.size) return file;
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", COMPRESS_QUALITY),
+    );
+    if (!blob) return file;
+    if (file.type === "image/jpeg" && blob.size >= file.size) return file;
     const baseName = file.name.replace(/\.[^.]+$/, "");
-    return new File([blob], `${baseName}.${outputType === "image/png" ? "png" : "webp"}`, { type: outputType });
+    return new File([blob], `${baseName}.jpg`, { type: "image/jpeg" });
   } catch {
     return file;
   }
@@ -56,7 +65,7 @@ async function uploadOne(file: File): Promise<{ url: string; storagePath: string
 
     const upload = await fetch(sign.url, {
       method: "PUT",
-      headers: { "Content-Type": compressed.type },
+      headers: directUploadHeaders(sign.url, compressed.type),
       body: compressed,
     }).catch(() => null);
     if (!upload?.ok) return { error: upload ? `Storage HTTP ${upload.status}` : "Falló la conexión con storage" };

@@ -4,7 +4,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY package.json package-lock.json* ./
 RUN npm ci
 COPY . .
-RUN --mount=type=secret,id=envprod,target=/app/.env.production,required=false npm run build
+RUN --mount=type=secret,id=envprod,target=/app/.env.production,required=false npm run build && rm -f .next/standalone/.env*
 
 FROM node:22-alpine
 ENV NODE_ENV=production \

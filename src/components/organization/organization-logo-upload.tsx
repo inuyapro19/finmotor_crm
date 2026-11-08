@@ -10,7 +10,7 @@ import { crmErrorMessage, crmFetch } from "@/lib/api/crm-fetch";
 import type { Organization } from "@/lib/data/crm";
 
 const ACCEPT = "image/png,image/jpeg,image/webp";
-const MAX_BYTES = 2 * 1024 * 1024;
+const MAX_BYTES = 8 * 1024 * 1024;
 
 export function OrganizationLogoUpload({ organization }: { organization: Organization }) {
   const router = useRouter();
@@ -26,7 +26,7 @@ export function OrganizationLogoUpload({ organization }: { organization: Organiz
       return;
     }
     if (file.size > MAX_BYTES) {
-      toast.error("El logo no puede superar 2 MB");
+      toast.error("El logo no puede superar 8 MB");
       return;
     }
     const body = new FormData();
@@ -65,7 +65,7 @@ export function OrganizationLogoUpload({ organization }: { organization: Organiz
             alt={`Logo de ${organization.name || "la automotora"}`}
             fill
             unoptimized
-            className="object-contain p-3"
+            className="object-contain"
           />
         ) : (
           <Building2 className="h-8 w-8 text-[var(--muted-foreground)]" />
@@ -74,7 +74,9 @@ export function OrganizationLogoUpload({ organization }: { organization: Organiz
       <div className="min-w-0">
         <p className="text-sm font-medium">Logo de la automotora</p>
         <p className="mt-1 max-w-md text-xs leading-relaxed text-[var(--muted-foreground)]">
-          Se usa en fichas de inspección y documentos operativos de venta. Los contratos mantienen el logo de Finmotor.
+          Se muestra en la ficha pública de tus vehículos y en fichas de inspección y documentos operativos de venta.
+          Los contratos mantienen el logo de Finmotor. Lo optimizamos automáticamente para web: recortamos los
+          márgenes vacíos y lo dejamos liviano.
         </p>
         <input
           ref={inputRef}
@@ -96,7 +98,7 @@ export function OrganizationLogoUpload({ organization }: { organization: Organiz
           {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageUp className="h-4 w-4" />}
           {uploading ? "Subiendo..." : hasLogo ? "Cambiar logo" : "Subir logo"}
         </button>
-        <p className="mt-2 text-[10px] text-[var(--muted-foreground)]">PNG, JPG o WebP. Máximo 2 MB.</p>
+        <p className="mt-2 text-[10px] text-[var(--muted-foreground)]">PNG, JPG o WebP. Máximo 8 MB.</p>
       </div>
     </div>
   );

@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     page: incoming.get("page") || "1",
     limit: incoming.get("limit") || "25",
   });
-  for (const key of ["from", "to", "status", "billingStatus", "reportType"]) {
+  for (const key of ["from", "to", "status", "billingStatus", "reportType", "stock"]) {
     const value = incoming.get(key)?.trim();
     if (value) params.set(key, value);
   }
@@ -92,6 +92,7 @@ function reportError(detail: unknown): string {
     plates_required: "Ingresa al menos una patente",
     too_many_plates: "Puedes solicitar hasta 200 patentes por lote",
     insufficient_tokens: "La automotora no tiene tokens suficientes para este lote",
+    insufficient_report_tokens: "No tienes tokens suficientes para este lote. Recarga tokens en Informes → Comprar tokens.",
     report_pricing_not_configured: "Finmotor todavía no configura la tarifa de informes de esta automotora",
     plates_must_contain_1_to_200_unique_values: "Ingresa entre 1 y 200 patentes válidas",
   };

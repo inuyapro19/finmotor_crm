@@ -15,6 +15,7 @@ import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
 import { BackendError, backendJson, backendJsonOrNull } from "@/lib/api/client";
 import { canSeeAllLeads, toCrmRole, type CrmRole } from "@/lib/auth/roles";
+import { getSupplierSession } from "@/lib/auth/supplier-session";
 
 // Reexportados por comodidad para los server components; los componentes cliente deben
 // importarlos desde `@/lib/auth/roles` (este módulo usa `next/headers`).
@@ -112,7 +113,11 @@ export const getCrmSession = cache(_getCrmSession);
  */
 export async function requireCrmSession(): Promise<CrmSession> {
   const session = await getCrmSession();
-  if (!session) redirect("/login");
+  if (!session) {
+    // Proveedor mayorista: misma cuenta y cookies, pero su lugar es /proveedor.
+    if (await getSupplierSession()) redirect("/proveedor");
+    redirect("/login");
+  }
   return session;
 }
 

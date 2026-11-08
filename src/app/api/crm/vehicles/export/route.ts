@@ -77,6 +77,7 @@ type VehicleExportRow = {
   purchase_price: number | string | null;
   min_price: number | string | null;
   commission_pct: number | string | null;
+  commission_amount: number | string | null;
   price: number | string | null;
   status: string | null;
 };
@@ -101,6 +102,8 @@ function margin(row: VehicleExportRow): number | null {
     return cost == null ? null : price - cost;
   }
   if (row.acquisition_kind === "consignment") {
+    const fixed = asNumber(row.commission_amount);
+    if (fixed != null) return fixed;
     const commission = asNumber(row.commission_pct);
     return commission == null ? null : Math.round(price * commission / 100);
   }

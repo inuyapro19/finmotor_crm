@@ -301,10 +301,11 @@ export function QuoteCard({
           const changed = item?.id !== currentVehicleId;
           setVehicle(item);
           // El precio de lista de la unidad recién elegida es el punto de partida natural.
+          // El pie y la parte de pago NO se tocan: el backend los conserva al cambiar de
+          // vehículo (sólo topa el pie si excede el precio de la nueva unidad) y perderlos acá
+          // significaría re-cobrar o re-evaluar algo que el cliente ya entregó.
           if (changed) {
             setPrice(item?.price ?? null);
-            setDown(null);
-            setTradeIn(null);
           }
         }}
       />

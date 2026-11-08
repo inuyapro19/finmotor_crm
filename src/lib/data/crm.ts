@@ -68,6 +68,8 @@ export type AgingResponse = {
 export type VehicleRow = {
   id: string;
   stockNumber: number | null;
+  publicationCode: string | null;
+  publicBrand: string | null;
   brand: string | null;
   model: string | null;
   year: number | null;
@@ -92,6 +94,7 @@ export type VehicleRow = {
   purchasePrice: number | null;
   minPrice: number | null;
   commissionPct: number | null;
+  commissionAmount?: number | null;
   receivedAt: string | null;
   exitedAt: string | null;
   inventoryLocation: string | null;
@@ -184,6 +187,56 @@ export type SaleTerms = {
   amountDueClp: number;
 };
 
+/** Vehículo que el cliente entrega en parte de pago, con su evaluación presencial. */
+export type TradeIn = {
+  id: string;
+  plate: string;
+  brand: string | null;
+  model: string | null;
+  year: number | null;
+  mileage: number | null;
+  notes: string | null;
+  source: "crm" | "financing_form";
+  status: "pending_evaluation" | "evaluated";
+  appraisedAmount: number | null;
+  evaluatedAt: string | null;
+  evaluationNotes: string | null;
+  /** Estado de la captación (`vehicle_sourcing_opportunities`) que lo hace entrar al stock:
+   *  `null` = aún no se inició; `accepted` = lista, falta el intake físico; `received` = ya
+   *  está en el stock y su valor quedó aplicado como abono. */
+  sourcing: { stage: string; vehicleId: string | null; acquisitionId: string | null } | null;
+  /** Informe histórico (multas, encargos, prenda vigente) pedido para esta patente ANTES de
+   *  aceptarla en parte de pago. `null` = todavía no se pidió. Mismo mecanismo y vocabulario que
+   *  el Kit de Compra Venta (`queued|processing|generated|failed`, ver `reports.ts`): la orden
+   *  se genera sola en background (scheduler SPLEC del servidor); para descargar se usa el
+   *  mismo endpoint `/api/crm/reports/{id}/download` que ya usa "Informe histórico". */
+  report: { id: string; status: "queued" | "processing" | "generated" | "failed" } | null;
+};
+
+/** Qué tiene (o le falta) al cliente ANTES del test drive del vehículo del lead. */
+export type Readiness = {
+  testDrive: { status: string; scheduledAt: string | null };
+  historyReport: { state: "none" | "processing" | "issued"; at: string | null };
+  /** `stale` = existe, pero era de otro vehículo (el cliente cambió de auto). */
+  creditQuote: { state: "none" | "current" | "stale"; at: string | null; status: string | null };
+  tradeIn: { present: boolean; status: string | null };
+};
+
+/** Oferta definitiva emitida (instantánea versionada). */
+export type FinalOffer = {
+  version: number;
+  issuedAt: string;
+  vehicleLabel: string | null;
+  plate: string | null;
+  price: number;
+  downPayment: number;
+  tradeIn: { plate: string; label: string | null; amount: number } | null;
+  financedAmount: number;
+  termMonths: number | null;
+  monthlyPayment: number | null;
+  monthlyRate: number | null;
+};
+
 export type LeadDetail = {
   lead: Lead;
   activities: LeadActivity[];
@@ -192,6 +245,9 @@ export type LeadDetail = {
   creditRequests: CreditRequest[];
   creditTerms: CreditTerms;
   sale: SaleTerms;
+  tradeIn: TradeIn | null;
+  readiness: Readiness | null;
+  finalOffer: FinalOffer | null;
 };
 
 /** Detalle con bitácora, tareas, cotización y financiamiento, para la ficha. */
@@ -205,6 +261,9 @@ export async function getLeadDetail(leadId: string): Promise<LeadDetail | null> 
     creditRequests: CreditRequest[];
     creditTerms: CreditTerms;
     sale: SaleTerms;
+    tradeIn?: TradeIn | null;
+    readiness?: Readiness | null;
+    finalOffer?: FinalOffer | null;
   }>(`/backoffice/leads/${leadId}`);
   if (!data?.lead) return null;
   const lead = fromCrmLead(data.lead);
@@ -215,6 +274,9 @@ export async function getLeadDetail(leadId: string): Promise<LeadDetail | null> 
     vehicleInterests: data.vehicleInterests ?? [],
     creditRequests: data.creditRequests ?? [],
     creditTerms: data.creditTerms ?? { monthlyRate: 0.021, terms: [12, 24, 36, 48] },
+    tradeIn: data.tradeIn ?? null,
+    readiness: data.readiness ?? null,
+    finalOffer: data.finalOffer ?? null,
     // Respaldo sólo por si el backend es más viejo que este build: sin financiamiento y el
     // total a cobrar, que es la lectura conservadora (nunca cobrar de menos).
     sale: data.sale ?? {
@@ -326,6 +388,7 @@ export type InventoryHistoryItem = {
   tradeInValue: number | null;
   minPrice: number | null;
   commissionPct: number | null;
+  commissionAmount?: number | null;
   enteredById: string | null;
   enteredByName: string | null;
   salesAgentId: string | null;
@@ -491,6 +554,8 @@ export type HistoricalReport = {
   createdAt: string | null;
   generatedAt: string | null;
   invoiceId: string | null;
+  /** Vehículo del stock con esa patente; null = patente consultada que no está en el stock. */
+  stock: { vehicleId: string; status: string | null; stockNumber: number | null } | null;
 };
 
 export type ReportSummary = {
@@ -502,6 +567,9 @@ export type ReportSummary = {
   tokens: number;
   unbilled: number;
   invoiced: number;
+  prepaid: number;
+  inStock: number;
+  outOfStock: number;
 };
 
 export type ReportsResult = {
@@ -520,7 +588,60 @@ const EMPTY_REPORT_SUMMARY: ReportSummary = {
   tokens: 0,
   unbilled: 0,
   invoiced: 0,
+  prepaid: 0,
+  inStock: 0,
+  outOfStock: 0,
 };
+
+export type ReportTokenPack = {
+  id: string;
+  name: string;
+  tokens: number;
+  priceClp: number;
+  pricePerTokenClp: number;
+};
+
+export type ReportTokenPurchase = {
+  id: string;
+  packName: string;
+  tokens: number;
+  priceClp: number;
+  status: "pending" | "paid" | "failed";
+  requestedByName: string | null;
+  createdAt: string | null;
+  paidAt: string | null;
+};
+
+export type ReportTokenMovement = {
+  id: string;
+  delta: number;
+  reason: "welcome_bonus" | "purchase" | "report_consumed" | "report_refund" | "adjustment";
+  note: string | null;
+  plate: string | null;
+  createdAt: string | null;
+};
+
+/** Saldo prepago de tokens de informes (mig 0084). `billingMode` postpaid = factura mensual. */
+export type ReportTokenWallet = {
+  enabled: boolean;
+  billingMode: "prepaid" | "postpaid";
+  balance: number;
+  plan: { id: string; name: string; description: string | null } | null;
+  packs: ReportTokenPack[];
+  purchases: ReportTokenPurchase[];
+  movements: ReportTokenMovement[];
+};
+
+export async function getReportWallet(organizationId: string): Promise<ReportTokenWallet | null> {
+  try {
+    const data = await backendJson<{ ok: boolean; wallet?: ReportTokenWallet }>(
+      `/backoffice/report-tokens/organizations/${encodeURIComponent(organizationId)}`,
+    );
+    return data.wallet ?? null;
+  } catch {
+    return null;
+  }
+}
 
 /** Historial de la automotora activa. La organización siempre viene de la sesión del servidor. */
 export async function getReports(
@@ -533,6 +654,8 @@ export async function getReports(
     status?: string;
     billingStatus?: string;
     reportType?: ReportType;
+    /** "in" = patentes del stock de la automotora; "out" = consultadas fuera del stock. */
+    stock?: "in" | "out";
     /** Sólo los informes que pidió esta persona (tarjeta "mío" del agente en el Dashboard). */
     requestedById?: string;
   } = {},
@@ -545,6 +668,7 @@ export async function getReports(
   if (opts.status) params.set("status", opts.status);
   if (opts.billingStatus) params.set("billingStatus", opts.billingStatus);
   if (opts.reportType) params.set("reportType", opts.reportType);
+  if (opts.stock) params.set("stock", opts.stock);
   if (opts.requestedById) params.set("requestedById", opts.requestedById);
 
   try {
@@ -725,6 +849,7 @@ export type Acquisition = {
   mileage: number | null;
   minPrice: number | null;
   commissionPct: number | null;
+  commissionAmount?: number | null;
   purchasePrice: number | null;
   startsAt: string | null;
   endsAt: string | null;
@@ -924,6 +1049,8 @@ export const getAging = cache(async function getAging(): Promise<AgingResponse> 
 type BackendVehicleRow = {
   id: string;
   stock_number: number | null;
+  publication_code: string | null;
+  public_brand: string | null;
   year: number | null;
   patent: string | null;
   price: number | string | null;
@@ -948,6 +1075,7 @@ type BackendVehicleRow = {
   purchase_price: number | string | null;
   min_price: number | string | null;
   commission_pct: number | string | null;
+  commission_amount: number | string | null;
   received_at: string | null;
   exited_at: string | null;
   inventory_location: string | null;
@@ -1056,6 +1184,8 @@ export async function getVehicles(opts: {
   const items = (data?.items ?? []).map((r) => ({
     id: String(r.id),
     stockNumber: r.stock_number == null ? null : Number(r.stock_number),
+    publicationCode: r.publication_code,
+    publicBrand: r.public_brand,
     brand: r.brand_label,
     model: r.model_label,
     year: r.year,
@@ -1080,6 +1210,7 @@ export async function getVehicles(opts: {
     purchasePrice: r.purchase_price == null ? null : Number(r.purchase_price),
     minPrice: r.min_price == null ? null : Number(r.min_price),
     commissionPct: r.commission_pct == null ? null : Number(r.commission_pct),
+    commissionAmount: r.commission_amount == null ? null : Number(r.commission_amount),
     receivedAt: r.received_at,
     exitedAt: r.exited_at,
     inventoryLocation: r.inventory_location,
@@ -1202,6 +1333,7 @@ export async function getInventoryHistory(opts: {
     purchase_price: number | string | null;
     min_price: number | string | null;
     commission_pct: number | string | null;
+  commission_amount: number | string | null;
     entered_by_id: string | null; entered_by_name: string | null; sales_agent_id: string | null;
     sales_agent_name: string | null; outcome: "active" | "sold" | "exited"; stock_days: number;
     estimated_margin: number | string | null; event_at: string | null;
@@ -1227,6 +1359,7 @@ export async function getInventoryHistory(opts: {
       tradeInValue: row.acquisition_kind === "trade_in" && row.min_price != null ? Number(row.min_price) : null,
       minPrice: row.acquisition_kind === "consignment" && row.min_price != null ? Number(row.min_price) : null,
       commissionPct: row.acquisition_kind === "consignment" && row.commission_pct != null ? Number(row.commission_pct) : null,
+      commissionAmount: row.acquisition_kind === "consignment" && row.commission_amount != null ? Number(row.commission_amount) : null,
       enteredById: row.entered_by_id, enteredByName: row.entered_by_name,
       salesAgentId: row.sales_agent_id, salesAgentName: row.sales_agent_name, outcome: row.outcome,
       stockDays: Number(row.stock_days ?? 0),

@@ -21,7 +21,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { clsx } from "clsx";
-import { Activity, ArrowRightLeft, BarChart3, Building2, Car, FileClock, History, Inbox, Landmark, LayoutGrid, Store, Users, Wrench } from "lucide-react";
+import { Activity, ArrowRightLeft, BarChart3, Building2, Car, FileClock, History, Inbox, Landmark, LayoutGrid, Store, Users, Warehouse, Wrench } from "lucide-react";
 
 import { CRM_ROLE_LABEL, canManageTeam, isDealershipAdmin, type CrmRole } from "@/lib/auth/roles";
 import {
@@ -63,6 +63,7 @@ function navGroups(role: CrmRole): NavGroup[] {
       items: [
         { href: "/vehiculos", label: "Stock de vehículos", icon: Car },
         { href: "/historial-stock", label: "Historial de stock", icon: History },
+        { href: "/mayorista", label: "Marketplace proveedores", icon: Warehouse },
       ],
     },
     {

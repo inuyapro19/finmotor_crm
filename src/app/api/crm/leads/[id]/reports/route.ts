@@ -35,6 +35,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       vehicle_required: "Elige primero la unidad que le estás cotizando",
       vehicle_plate_missing: "Esa unidad no tiene patente registrada",
       report_pricing_not_configured: "Tu automotora todavía no tiene tarifas de informes configuradas — pídeselo a Finmotor",
+      insufficient_report_tokens: "No te quedan tokens para informes. Recarga en Informes → Comprar tokens.",
       lead_not_assigned_to_you: "Esta solicitud está en la cartera de otro agente",
       lead_out_of_scope: "Esta solicitud no es de tu automotora",
     };

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { crmErrorMessage, crmFetch } from "@/lib/api/crm-fetch";
+import { directUploadHeaders } from "@/lib/storage/direct-upload";
 
 
 const MAX_RESULT_BYTES = 20 * 1024 * 1024;
@@ -44,7 +45,7 @@ export function PrepurchaseResultAction({ reportId, plate }: { reportId: string;
       }
       const putResponse = await fetch(signed.url, {
         method: "PUT",
-        headers: { "Content-Type": "application/pdf" },
+        headers: directUploadHeaders(signed.url, "application/pdf"),
         body: file,
       });
       if (!putResponse.ok) {

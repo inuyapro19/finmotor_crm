@@ -43,6 +43,34 @@ export async function POST(request: Request) {
     );
   }
 
+  // Contraseña temporal de una invitación: el backend no abre sesión y entrega un token de un
+  // solo uso (15 min) para crear la definitiva en /restablecer-clave.
+  if (upstream.status === 403 && data?.detail === "password_change_required" && data?.resetToken) {
+    return NextResponse.json(
+      { passwordChangeRequired: true, resetToken: data.resetToken },
+      { status: 403, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+  // Automotora auto-registrada en finmotor.cl que aún no confirma su correo.
+  if (upstream.status === 403 && data?.detail === "email_not_verified") {
+    return NextResponse.json(
+      {
+        error:
+          "Confirma tu correo para entrar: te enviamos un enlace al registrar tu automotora. Si no lo encuentras, pide uno nuevo en finmotor.cl/login.",
+      },
+      { status: 403 },
+    );
+  }
+  if (data?.detail === "temp_password_expired") {
+    return NextResponse.json(
+      {
+        error:
+          "Tu contraseña temporal caducó. Usa «¿Olvidaste tu contraseña?» o pide a tu administrador que te invite de nuevo.",
+      },
+      { status: 401 },
+    );
+  }
+
   if (!upstream.ok || !data?.accessToken || !data?.refreshToken) {
     return NextResponse.json(
       { error: "Correo o contraseña incorrectos" },
@@ -51,30 +79,33 @@ export async function POST(request: Request) {
   }
 
   const scopeRes = await apiFetch("/backoffice/scope", { auth: data.accessToken });
-  if (!scopeRes.ok) {
-    return NextResponse.json(
-      { error: "Tu cuenta no tiene acceso al CRM. Pídele a tu administrador que te invite." },
-      { status: 403 },
+  let hasDealership = false;
+  if (scopeRes.ok) {
+    const scopeData = await scopeRes.json().catch(() => ({}));
+    const memberships: ScopeMembership[] = scopeData?.scope?.memberships ?? [];
+    hasDealership = memberships.some(
+      (m) => m.isActive && m.organization?.type === DEALERSHIP_TYPE && m.organization?.id,
     );
   }
 
-  const scopeData = await scopeRes.json().catch(() => ({}));
-  const memberships: ScopeMembership[] = scopeData?.scope?.memberships ?? [];
-  const hasDealership = memberships.some(
-    (m) => m.isActive && m.organization?.type === DEALERSHIP_TYPE && m.organization?.id,
-  );
-
+  // Proveedor mayorista: no es automotora, pero opera su portal en /proveedor de este CRM.
+  let home = process.env.FINMOTOR_DEMO_MODE === "true" ? "/demo/marketplace" : "/";
   if (!hasDealership) {
-    return NextResponse.json(
-      {
-        error:
-          "Este panel es exclusivo para automotoras. Si eres del equipo Finmotor, ingresa por admin.finmotor.cl.",
-      },
-      { status: 403 },
-    );
+    const supplierRes = await apiFetch("/wholesale/supplier/me", { auth: data.accessToken });
+    const supplierData = supplierRes.ok ? await supplierRes.json().catch(() => ({})) : {};
+    if (!(supplierData?.suppliers?.length > 0)) {
+      return NextResponse.json(
+        {
+          error:
+            "Este panel es exclusivo para automotoras y proveedores Finmotor. Si eres del equipo Finmotor, ingresa por admin.finmotor.cl.",
+        },
+        { status: 403 },
+      );
+    }
+    home = "/proveedor";
   }
 
-  const res = NextResponse.json({ ok: true });
+  const res = NextResponse.json({ ok: true, home });
   setSessionCookies(res, data.accessToken, data.refreshToken);
   return res;
 }

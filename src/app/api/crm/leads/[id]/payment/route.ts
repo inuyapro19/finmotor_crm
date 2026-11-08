@@ -43,6 +43,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       vehicle_missing_seller: "Esa unidad no tiene un vendedor asociado",
       nothing_to_charge: "No hay nada que cobrar con la cotización actual",
       amount_mismatch: "El monto no coincide con lo cotizado — revísalo",
+      credit_not_approved: "La financiera todavía no aprueba el crédito: no se puede cobrar el pie hasta entonces",
       lead_not_assigned_to_you: "Esta solicitud está en la cartera de otro agente",
       lead_out_of_scope: "Esta solicitud no es de tu automotora",
     };

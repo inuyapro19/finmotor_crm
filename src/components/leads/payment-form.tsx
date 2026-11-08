@@ -64,6 +64,17 @@ export function PaymentForm({
     );
   }
 
+  // Con financiamiento de por medio no se cobra el pie hasta que la financiera aprobó: cobrar
+  // antes daría por confirmada una venta que todavía puede caerse. El backend ya lo rechaza
+  // (`credit_not_approved`); esto evita que el agente llegue a intentarlo.
+  if (financed && sale.financeStatus !== "approved") {
+    return (
+      <p className="px-4 py-4 text-xs text-[var(--muted-foreground)]">
+        Esperando que la financiera apruebe el crédito — recién ahí se puede cobrar el pie.
+      </p>
+    );
+  }
+
   const send = async () => {
     setSending(true);
     try {
@@ -144,7 +155,7 @@ export function PaymentForm({
           </button>
           <p className="text-[11px] leading-relaxed text-[var(--muted-foreground)]">
             {noDownPayment
-              ? "Sin pie: sólo confirma la venta para que quede lista en cuanto se apruebe el crédito."
+              ? "Sin pie: el crédito ya está aprobado, esto sólo confirma la venta."
               : "Queda informado: no pasa por pasarela, es lo que cobraste en el mostrador."}
           </p>
         </>

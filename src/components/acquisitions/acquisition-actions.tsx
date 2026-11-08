@@ -1,5 +1,8 @@
 "use client";
 
+import { CommissionInput } from "@/components/acquisitions/commission-input";
+import { commissionError, type CommissionType } from "@/lib/commission";
+
 /**
  * Ingreso de un vehículo a la automotora y emisión de su contrato.
  *
@@ -55,6 +58,7 @@ type FormState = {
   mileage: string;
   minPrice: string;
   commissionPct: string;
+  commissionType: CommissionType;
   purchasePrice: string;
   startsAt: string;
   endsAt: string;
@@ -80,7 +84,8 @@ function toForm(a?: Acquisition, defaultCommission?: number | null): FormState {
     color: a?.color ?? "",
     mileage: a?.mileage !== null && a?.mileage !== undefined ? String(a.mileage) : "",
     minPrice: a?.minPrice ? String(a.minPrice) : "",
-    commissionPct:
+    commissionType: a?.commissionAmount != null ? "fixed" : "percentage",
+    commissionPct: a?.commissionAmount != null ? String(a.commissionAmount) :
       a?.commissionPct !== null && a?.commissionPct !== undefined
         ? String(a.commissionPct)
         : defaultCommission !== null && defaultCommission !== undefined
@@ -114,6 +119,8 @@ export function AcquisitionActions({
     setForm((prev) => ({ ...prev, [field]: value }));
 
   const submit = async () => {
+    const error = commissionError(form.commissionType, form.commissionPct);
+    if (error) { toast.error(error); return; }
     if (!form.ownerName.trim()) {
       toast.error("Falta el nombre de quien entrega el auto");
       return;
@@ -149,7 +156,8 @@ export function AcquisitionActions({
         color: form.color.trim() || undefined,
         mileage: form.mileage ? Number(form.mileage) : undefined,
         minPrice: form.minPrice ? Number(form.minPrice) : undefined,
-        commissionPct: form.commissionPct ? Number(form.commissionPct) : undefined,
+        commissionPct: form.commissionType === "percentage" && form.commissionPct !== "" ? Number(form.commissionPct) : null,
+        commissionAmount: form.commissionType === "fixed" && form.commissionPct !== "" ? Number(form.commissionPct) : null,
         purchasePrice: form.purchasePrice ? Number(form.purchasePrice) : undefined,
         startsAt: form.startsAt ? `${form.startsAt}T12:00:00Z` : undefined,
         endsAt: form.endsAt ? `${form.endsAt}T12:00:00Z` : undefined,
@@ -310,9 +318,7 @@ export function AcquisitionActions({
             <FormField label="Precio mínimo (CLP)" required hint="Bajo este monto no puedes cerrar sin autorización.">
               <input type="number" value={form.minPrice} onChange={(e) => update("minPrice", e.target.value)} className={fieldInputClass} />
             </FormField>
-            <FormField label="Comisión (%)">
-              <input type="number" step="0.1" min={0} max={100} value={form.commissionPct} onChange={(e) => update("commissionPct", e.target.value)} className={fieldInputClass} />
-            </FormField>
+            <CommissionInput type={form.commissionType} value={form.commissionPct} onTypeChange={(type) => setForm((current) => ({ ...current, commissionType: type, commissionPct: "" }))} onChange={(value) => update("commissionPct", value)} />
           </div>
         )}
         {isPurchase && (

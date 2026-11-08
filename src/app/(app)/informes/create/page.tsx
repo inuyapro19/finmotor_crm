@@ -4,9 +4,11 @@ import { ArrowLeft } from "lucide-react";
 import { ReportBatchForm } from "@/components/reports/report-batch-form";
 import { PageHeader } from "@/components/ui/primitives";
 import { canWrite, requireCrmSession } from "@/lib/auth/session";
+import { getReportWallet } from "@/lib/data/crm";
 
 export default async function CreateReportsPage() {
   const session = await requireCrmSession();
+  const wallet = await getReportWallet(session.dealership.id);
 
   return (
     <>
@@ -26,6 +28,8 @@ export default async function CreateReportsPage() {
       <ReportBatchForm
         dealershipName={session.dealership.name}
         canRequest={canWrite(session.role)}
+        tokenBalance={wallet?.enabled ? wallet.balance : null}
+        prepaid={wallet?.billingMode === "prepaid"}
       />
     </>
   );

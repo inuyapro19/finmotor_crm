@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { CrmShell } from "@/components/layout/crm-shell";
 import { getCrmSession } from "@/lib/auth/session";
+import { getSupplierSession } from "@/lib/auth/supplier-session";
 import { getActivityFeed, getNotifications } from "@/lib/data/crm";
 
 /**
@@ -12,7 +13,11 @@ import { getActivityFeed, getNotifications } from "@/lib/data/crm";
  */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await getCrmSession();
-  if (!session) redirect("/login");
+  if (!session) {
+    // Un proveedor mayorista también entra a este CRM, pero a su propio portal.
+    if (await getSupplierSession()) redirect("/proveedor");
+    redirect("/login");
+  }
 
   const [notifications, activity] = await Promise.all([getNotifications(), getActivityFeed(30)]);
 

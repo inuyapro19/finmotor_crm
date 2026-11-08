@@ -152,8 +152,9 @@ export function NewMember() {
           <div className="w-full max-w-sm rounded-2xl bg-[var(--card)] p-5">
             <h2 className="text-base font-semibold">Cuenta creada</h2>
             <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-              Le enviamos el acceso por correo. Si no le llega, dictale esta contraseña
-              temporal — no la vas a poder ver de nuevo.
+              Le enviamos por correo un enlace para crear su contraseña. Si no le llega, díctale
+              esta contraseña temporal: caduca en 72 horas y al entrar le pediremos cambiarla.
+              No la vas a poder ver de nuevo.
             </p>
             <button
               onClick={async () => {

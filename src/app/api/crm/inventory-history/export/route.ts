@@ -1,3 +1,4 @@
+import { commissionLabel } from "@/lib/commission";
 import ExcelJS from "exceljs";
 import { NextResponse } from "next/server";
 
@@ -45,7 +46,7 @@ export async function GET(request: Request) {
     sheet.mergeCells("A2:S2");
     sheet.getCell("A2").value = `Generado ${new Intl.DateTimeFormat("es-CL", { dateStyle: "long", timeStyle: "short", timeZone: "America/Santiago" }).format(new Date())}`;
     sheet.getCell("A2").font = { size: 9, color: { argb: "FF5A6070" } };
-    const columns = ["Código", "Patente", "Vehículo", "Tipo stock", "Resultado", "Ingreso", "Venta", "Salida física", "Días stock", "Sucursal", "Ingresado por", "Vendido por", "Precio de compra", "Valor de recepción", "Mínimo autorizado", "Comisión (%)", "Precio de venta", "Margen estimado", "Motivo salida"];
+    const columns = ["Código", "Patente", "Vehículo", "Tipo stock", "Resultado", "Ingreso", "Venta", "Salida física", "Días stock", "Sucursal", "Ingresado por", "Vendido por", "Precio de compra", "Valor de recepción", "Mínimo autorizado", "Comisión acordada", "Precio de venta", "Margen estimado", "Motivo salida"];
     const rows = items.map((item) => [
       item.stockNumber == null ? "" : `STK-${String(item.stockNumber).padStart(6, "0")}`,
       item.patent ?? "", [item.brand, item.model, item.year].filter(Boolean).join(" "),
@@ -53,7 +54,7 @@ export async function GET(request: Request) {
       item.receivedAt ? new Date(item.receivedAt) : null, item.soldAt ? new Date(item.soldAt) : null,
       item.exitedAt ? new Date(item.exitedAt) : null, item.stockDays, item.locationName ?? "",
       item.enteredByName ?? "", item.salesAgentName ?? "Sin asignar",
-      item.purchasePrice, item.tradeInValue, item.minPrice, item.commissionPct,
+      item.purchasePrice, item.tradeInValue, item.minPrice, commissionLabel(item),
       item.outcome === "sold" ? item.saleAmount : null,
       item.outcome === "sold" ? item.estimatedMargin : null, item.exitReason ?? "",
     ]);

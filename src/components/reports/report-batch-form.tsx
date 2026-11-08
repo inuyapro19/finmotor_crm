@@ -23,9 +23,15 @@ function parsePlates(value: string) {
 export function ReportBatchForm({
   dealershipName,
   canRequest,
+  tokenBalance,
+  prepaid,
 }: {
   dealershipName: string;
   canRequest: boolean;
+  /** Saldo de tokens; null si no se pudo cargar (el backend igual valida al enviar). */
+  tokenBalance: number | null;
+  /** Prepago: sin saldo suficiente no se puede enviar el lote. */
+  prepaid: boolean;
 }) {
   const [rawPlates, setRawPlates] = useState("");
   const [reportType, setReportType] = useState<ReportType>("standard");
@@ -38,6 +44,8 @@ export function ReportBatchForm({
   const { plates, duplicates } = parsePlates(rawPlates);
   const overLimit = plates.length > 200;
   const expectedTokens = plates.length * TOKEN_COST[reportType];
+  const [balance, setBalance] = useState(tokenBalance);
+  const shortOfTokens = prepaid && balance !== null && expectedTokens > balance;
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -81,6 +89,7 @@ export function ReportBatchForm({
         toast.success("Lote de informes solicitado");
       }
       setRawPlates("");
+      if (balance !== null) setBalance(Math.max(0, balance - created * TOKEN_COST[reportType]));
     } catch (error) {
       const message = crmErrorMessage(error, "No pudimos conectar con el servicio de informes");
       if (message) toast.error(message);
@@ -171,7 +180,7 @@ export function ReportBatchForm({
 
           <button
             type="submit"
-            disabled={!canRequest || submitting || plates.length === 0 || overLimit}
+            disabled={!canRequest || submitting || plates.length === 0 || overLimit || shortOfTokens}
             className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] bg-[var(--primary)] px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-[var(--primary)]/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <FileCheck2 className="h-4 w-4" />}
@@ -200,9 +209,31 @@ export function ReportBatchForm({
                 {expectedTokens} <span className="text-base font-medium">tokens</span>
               </p>
             </div>
-            <p className="text-[11px] leading-relaxed text-[var(--muted-foreground)]">
-              El valor monetario no se calcula aquí. La tarifa contractual se aplica al momento de facturar.
-            </p>
+            {balance !== null && (
+              <div className="flex items-center justify-between border-b border-[var(--border)] pb-3 text-sm">
+                <span className="text-[var(--muted-foreground)]">Saldo disponible</span>
+                <strong className="tabular-nums">{balance} {balance === 1 ? "token" : "tokens"}</strong>
+              </div>
+            )}
+            {shortOfTokens ? (
+              <Notice tone="warn">
+                Te faltan {expectedTokens - (balance ?? 0)} tokens para este lote.{" "}
+                <Link href="/informes/tokens" className="font-semibold underline">
+                  Comprar tokens
+                </Link>
+              </Notice>
+            ) : prepaid ? (
+              <p className="text-[11px] leading-relaxed text-[var(--muted-foreground)]">
+                Los tokens se descuentan al enviar el lote. Si un informe falla, te los devolvemos.{" "}
+                <Link href="/informes/tokens" className="font-semibold text-[var(--primary)]">
+                  Comprar tokens
+                </Link>
+              </p>
+            ) : (
+              <p className="text-[11px] leading-relaxed text-[var(--muted-foreground)]">
+                Se usan primero los tokens de tu saldo; el resto se factura a fin de mes según tu tarifa.
+              </p>
+            )}
           </div>
         </Panel>
 

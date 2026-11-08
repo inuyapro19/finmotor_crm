@@ -26,8 +26,8 @@ export const BACKEND_API_URL = requiredServerEnv(
 );
 const SERVICE_KEY = requiredServerEnv("FINMOTOR_SERVICE_KEY", process.env.FINMOTOR_SERVICE_KEY);
 
-export const ACCESS_COOKIE = "fm-crm-access";
-export const REFRESH_COOKIE = "fm-crm-refresh";
+import { ACCESS_COOKIE, REFRESH_COOKIE } from "@/lib/auth/cookies";
+export { ACCESS_COOKIE, REFRESH_COOKIE } from "@/lib/auth/cookies";
 
 type ApiInit = Omit<RequestInit, "headers"> & {
   headers?: Record<string, string>;

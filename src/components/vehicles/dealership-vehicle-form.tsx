@@ -1,5 +1,8 @@
 "use client";
 
+import { CommissionInput } from "@/components/acquisitions/commission-input";
+import { commissionError, type CommissionType } from "@/lib/commission";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -149,6 +152,7 @@ type FormState = {
   purchasePrice: string;
   minPrice: string;
   commissionPct: string;
+  commissionType: CommissionType;
   startsAt: string;
   endsAt: string;
   receivedAt: string;
@@ -214,7 +218,8 @@ function initialState(
     ownerAddress: acquisition?.ownerAddress ?? "",
     purchasePrice: acquisition?.purchasePrice != null ? String(acquisition.purchasePrice) : "",
     minPrice: acquisition?.minPrice != null ? String(acquisition.minPrice) : "",
-    commissionPct: acquisition?.commissionPct != null ? String(acquisition.commissionPct) : "",
+    commissionType: acquisition?.commissionAmount != null ? "fixed" : "percentage",
+    commissionPct: acquisition?.commissionAmount != null ? String(acquisition.commissionAmount) : acquisition?.commissionPct != null ? String(acquisition.commissionPct) : "",
     startsAt: dateOnly(acquisition?.startsAt),
     endsAt: dateOnly(acquisition?.endsAt),
     receivedAt: dateOnly(acquisition?.receivedAt) || today(),
@@ -331,6 +336,11 @@ export function DealershipVehicleForm({
   };
 
   const submit = async () => {
+    if (commissionError(form.commissionType, form.commissionPct)) {
+      setActiveTab("intake");
+      toast.error(commissionError(form.commissionType, form.commissionPct)!);
+      return;
+    }
     if (!form.patent || !form.brand.trim() || !form.model.trim() || !form.year || !form.salePrice) {
       setActiveTab(!form.patent || !form.brand.trim() || !form.model.trim() || !form.year ? "vehicle" : "intake");
       toast.error("Completa patente, marca, modelo, año y precio de venta");
@@ -414,7 +424,8 @@ export function DealershipVehicleForm({
         mileage: asNumber(form.mileage),
         purchasePrice: asNumber(form.purchasePrice),
         minPrice: asNumber(form.minPrice),
-        commissionPct: asNumber(form.commissionPct),
+        commissionPct: form.kind === "consignment" && form.commissionType === "percentage" ? asNumber(form.commissionPct) : null,
+        commissionAmount: form.kind === "consignment" && form.commissionType === "fixed" ? asNumber(form.commissionPct) : null,
         startsAt: asDate(form.startsAt),
         endsAt: asDate(form.endsAt),
         receivedAt: asDate(form.receivedAt),
@@ -494,6 +505,10 @@ export function DealershipVehicleForm({
       return;
     }
     if (activeTab === "intake") {
+      if (commissionError(form.commissionType, form.commissionPct)) {
+        toast.error(commissionError(form.commissionType, form.commissionPct)!);
+        return;
+      }
       if (!form.ownerName.trim()) {
         toast.error("Identifica a la persona que entrega el vehículo");
         return;
@@ -644,7 +659,7 @@ export function DealershipVehicleForm({
               <div className="grid gap-3 sm:grid-cols-2">
                 {isPurchase && <FormField label="Precio de compra (CLP)" required><input type="number" min={0} value={form.purchasePrice} onChange={(e) => update("purchasePrice", e.target.value)} className={fieldInputClass} /></FormField>}
                 {isConsignment && <FormField label="Precio mínimo autorizado" required><input type="number" min={0} value={form.minPrice} onChange={(e) => update("minPrice", e.target.value)} className={fieldInputClass} /></FormField>}
-                {isConsignment && <FormField label="Comisión automotora (%)" required><input type="number" min={0} max={100} step="0.1" value={form.commissionPct} onChange={(e) => update("commissionPct", e.target.value)} className={fieldInputClass} /></FormField>}
+                {isConsignment && <CommissionInput type={form.commissionType} value={form.commissionPct} onTypeChange={(type) => setForm((current) => ({ ...current, commissionType: type, commissionPct: "" }))} onChange={(value) => update("commissionPct", value)} required />}
                 {form.kind === "trade_in" && <FormField label="Valor asignado (CLP)" required><input type="number" min={0} value={form.minPrice} onChange={(e) => update("minPrice", e.target.value)} className={fieldInputClass} /></FormField>}
                 {isConsignment && <FormField label="Inicio del mandato"><input type="date" value={form.startsAt} onChange={(e) => update("startsAt", e.target.value)} className={fieldInputClass} /></FormField>}
                 {isConsignment && <FormField label="Vencimiento del mandato"><input type="date" value={form.endsAt} onChange={(e) => update("endsAt", e.target.value)} className={fieldInputClass} /></FormField>}

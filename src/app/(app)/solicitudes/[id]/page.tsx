@@ -5,6 +5,7 @@ import { ArrowLeft, FileText, Landmark, Repeat, Stethoscope, User } from "lucide
 import { canManageTeam, canManageTransfers, canWrite, isDealershipAdmin, requireCrmSession } from "@/lib/auth/session";
 import { getAssignableAgents, getLeadDetail } from "@/lib/data/crm";
 import { getLeadIntelligence } from "@/lib/data/mia-crm";
+import { getLeadFiles } from "@/lib/data/lead-files";
 import { fmtCLP, fmtDateTime, timeAgo } from "@/lib/format";
 import { SLA_LABEL, isActionOverdue, leadValue, slaLevel, sourceLabel } from "@/lib/leads";
 import { Panel, Pill } from "@/components/ui/primitives";
@@ -18,6 +19,10 @@ import { LeadTabs } from "@/components/leads/lead-tabs";
 import { QuoteCard } from "@/components/leads/quote-card";
 import { CreditPanel } from "@/components/leads/credit-panel";
 import { LeadTasks } from "@/components/leads/lead-tasks";
+import { LeadDocuments } from "@/components/leads/lead-documents";
+import { LeadReadiness } from "@/components/leads/lead-readiness";
+import { TradeInPanel } from "@/components/leads/trade-in-panel";
+import { FinalOfferCard } from "@/components/leads/final-offer-card";
 import { CloseTab } from "@/components/leads/close-tab";
 import { MiaIntelligenceTab } from "@/components/leads/mia-intelligence-tab";
 
@@ -47,7 +52,7 @@ export default async function LeadDetailPage({
   // y aquí llega como null.
   const detail = await getLeadDetail(id);
   if (!detail) notFound();
-  const { lead, activities, tasks, vehicleInterests, creditRequests, creditTerms, sale } = detail;
+  const { lead, activities, tasks, vehicleInterests, creditRequests, creditTerms, sale, tradeIn, readiness, finalOffer } = detail;
 
   const managesTeam = canManageTeam(session.role);
   const managesTransfers = canManageTransfers(session.dealership.memberRole);
@@ -56,7 +61,7 @@ export default async function LeadDetailPage({
   const editable = canWrite(session.role);
   const value = leadValue(lead);
   const overdue = isActionOverdue(lead);
-  const intelligence = await getLeadIntelligence(lead.id);
+  const [intelligence, files] = await Promise.all([getLeadIntelligence(lead.id), getLeadFiles(lead.id)]);
 
   return (
     <>
@@ -106,6 +111,7 @@ export default async function LeadDetailPage({
             content: (
               <div className="grid gap-4 lg:grid-cols-2">
                 <div className="space-y-4">
+                  {readiness && <LeadReadiness readiness={readiness} />}
                   <Panel title="Registrar gestión" subtitle="Después de llamar, deja constancia acá">
                     <div className="p-4">
                       <LeadActions leadId={lead.id} currentStage={lead.stage} />
@@ -187,6 +193,30 @@ export default async function LeadDetailPage({
                   <QuoteCard lead={lead} vehicleInterests={vehicleInterests} canWrite={editable} />
                 </Panel>
 
+                <Panel
+                  title="Vehículo en parte de pago"
+                  subtitle="Se evalúa presencialmente; su valor entra en la cotización y en la oferta definitiva"
+                >
+                  <TradeInPanel
+                    key={`${tradeIn?.id ?? "none"}-${tradeIn?.status ?? ""}-${tradeIn?.appraisedAmount ?? ""}`}
+                    leadId={lead.id}
+                    tradeIn={tradeIn}
+                    canWrite={editable}
+                    locked={Boolean(lead.purchaseId)}
+                  />
+                </Panel>
+
+                <Panel title="Oferta definitiva" subtitle="Con el vehículo elegido y la evaluación de la parte de pago">
+                  <FinalOfferCard
+                    key={finalOffer?.version ?? 0}
+                    lead={lead}
+                    tradeIn={tradeIn}
+                    finalOffer={finalOffer}
+                    creditTerms={creditTerms}
+                    canWrite={editable}
+                  />
+                </Panel>
+
                 <Panel title="Servicios que puedes ofrecerle" className="lg:col-span-2">
                   <ul className="divide-y divide-[var(--border)] sm:grid sm:grid-cols-2 sm:divide-y-0">
                     <ServiceRow
@@ -222,6 +252,19 @@ export default async function LeadDetailPage({
                   </div>
                 </Panel>
               </div>
+            ),
+          },
+          {
+            key: "documentos",
+            label: "Documentos",
+            badge: files.documents.length > 0 ? String(files.documents.length) : undefined,
+            content: (
+              <LeadDocuments
+                leadId={lead.id}
+                catalog={files.catalog}
+                documents={files.documents}
+                canWrite={editable}
+              />
             ),
           },
           {

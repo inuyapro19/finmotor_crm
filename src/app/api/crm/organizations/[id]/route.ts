@@ -39,8 +39,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
     return NextResponse.json({ error: "Usa un archivo PNG, JPG o WebP" }, { status: 400 });
   }
-  if (file.size > 2 * 1024 * 1024) {
-    return NextResponse.json({ error: "El logo no puede superar 2 MB" }, { status: 413 });
+  if (file.size > 8 * 1024 * 1024) {
+    return NextResponse.json({ error: "El logo no puede superar 8 MB" }, { status: 413 });
   }
   const body = new FormData();
   body.set("file", file, file.name);
@@ -54,7 +54,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   if (!upstream.ok) {
     const errors: Record<string, string> = {
       organization_logo_empty: "La imagen está vacía",
-      organization_logo_too_large: "El logo no puede superar 2 MB",
+      organization_logo_too_large: "El logo no puede superar 8 MB",
       organization_logo_invalid_type: "Usa un archivo PNG, JPG o WebP",
       organization_logo_upload_failed: "No pudimos guardar el logo",
       insufficient_org_role: "No tienes permiso para cambiar el logo",
