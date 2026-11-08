@@ -77,22 +77,29 @@ async function uploadOne(file: File): Promise<{ url: string; storagePath: string
   }
 }
 
+/** Orden natural por nombre (IMG_2 antes que IMG_10): respeta la secuencia de la cámara. */
+export function sortFilesByName(files: File[]): File[] {
+  return [...files].sort((a, b) => a.name.localeCompare(b.name, "es", { numeric: true, sensitivity: "base" }));
+}
+
+/**
+ * Sube y registra las fotos EN ESE ORDEN. Devuelve el id de cada foto registrada en la misma
+ * posición que su archivo (null si falló), para luego guardar el orden final completo.
+ */
 export async function uploadAndRegisterPhotos(
   vehicleId: string,
   files: File[],
-  primaryIndex: number,
   startPosition = 0,
-): Promise<{ registered: number; errors: string[] }> {
-  const ordered = [...files.keys()]
-    .sort((a, b) => (a === primaryIndex ? -1 : b === primaryIndex ? 1 : a - b))
-    .map((index) => files[index]);
-  let registered = 0;
+): Promise<{ ids: (string | null)[]; registered: number; errors: string[] }> {
+  const ids: (string | null)[] = [];
   const errors: string[] = [];
 
-  for (let index = 0; index < ordered.length; index += 1) {
-    const result = await uploadOne(ordered[index]);
+  for (let index = 0; index < files.length; index += 1) {
+    const file = files[index];
+    ids.push(null);
+    const result = await uploadOne(file);
     if ("error" in result) {
-      errors.push(`${ordered[index].name}: ${result.error}`);
+      errors.push(`${file.name}: ${result.error}`);
       continue;
     }
     let response: Response;
@@ -109,11 +116,33 @@ export async function uploadAndRegisterPhotos(
     } catch (error) {
       const message = crmErrorMessage(error, "No se pudo contactar el servidor para registrar la foto");
       if (!message) throw error;
-      errors.push(`${ordered[index].name}: ${message}`);
+      errors.push(`${file.name}: ${message}`);
       continue;
     }
-    if (response?.ok) registered += 1;
-    else errors.push(`${ordered[index].name}: no se pudo registrar`);
+    const data = await response.json().catch(() => ({}));
+    if (response.ok && data?.photo?.id) ids[index] = String(data.photo.id);
+    else errors.push(`${file.name}: no se pudo registrar`);
   }
-  return { registered, errors };
+  return { ids, registered: ids.filter(Boolean).length, errors };
+}
+
+/** Guarda el orden final de TODAS las fotos del vehículo; la primera queda como portada. */
+export async function saveVehiclePhotoOrder(vehicleId: string, photoIds: string[]): Promise<string | null> {
+  const response = await crmFetch(`/api/crm/vehicles/${encodeURIComponent(vehicleId)}/photos/order`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ photoIds }),
+  });
+  if (response.ok) return null;
+  const data = await response.json().catch(() => ({}));
+  return data?.error || "No pudimos guardar el orden de las fotos";
+}
+
+/** Quita una foto ya guardada del vehículo. */
+export async function deleteVehiclePhoto(vehicleId: string, photoId: string): Promise<boolean> {
+  const response = await crmFetch(
+    `/api/crm/vehicles/${encodeURIComponent(vehicleId)}/photos/${encodeURIComponent(photoId)}`,
+    { method: "DELETE" },
+  );
+  return response.ok;
 }

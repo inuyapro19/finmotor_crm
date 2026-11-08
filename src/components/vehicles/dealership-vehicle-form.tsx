@@ -11,11 +11,11 @@ import { toast } from "sonner";
 
 import { FormField, fieldInputClass } from "@/components/ui/form-dialog";
 import { Notice, Panel } from "@/components/ui/primitives";
-import { VehiclePhotoUpload } from "@/components/vehicles/vehicle-photo-upload";
+import { VehiclePhotoUpload, type PhotoItem } from "@/components/vehicles/vehicle-photo-upload";
 import { VehiclePreparationCard } from "@/components/vehicles/vehicle-preparation-card";
 import { crmErrorMessage, crmFetch } from "@/lib/api/crm-fetch";
 import type { Acquisition, OrganizationLocation, VehicleDetail, VehiclePreparation } from "@/lib/data/crm";
-import { uploadAndRegisterPhotos } from "@/lib/photos/upload";
+import { deleteVehiclePhoto, saveVehiclePhotoOrder, uploadAndRegisterPhotos } from "@/lib/photos/upload";
 
 
 const KINDS = [
@@ -256,8 +256,11 @@ export function DealershipVehicleForm({
   const [lookupDone, setLookupDone] = useState(false);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<FormTab>("vehicle");
-  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
-  const [primaryPhotoIndex, setPrimaryPhotoIndex] = useState(0);
+  // Fotos guardadas + nuevas en el orden final que verá el comprador (la primera es la portada).
+  const savedPhotos = [...(vehicle?.photos ?? [])].sort((a, b) => a.position - b.position);
+  const [photoItems, setPhotoItems] = useState<PhotoItem[]>(() =>
+    savedPhotos.map((photo) => ({ key: `saved-${photo.id}`, kind: "saved" as const, id: photo.id, url: photo.url })),
+  );
 
   const update = <K extends keyof FormState>(field: K, value: FormState[K]) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -457,23 +460,8 @@ export function DealershipVehicleForm({
         return;
       }
       const savedVehicleId = String(data?.vehicle?.id || vehicle?.id || "");
-      if (photoFiles.length > 0 && savedVehicleId) {
-        toast.message(`Subiendo ${photoFiles.length} ${photoFiles.length === 1 ? "foto" : "fotos"}...`);
-        const existingPositions = vehicle?.photos.map((photo) => photo.position) ?? [];
-        const startPosition = existingPositions.length
-          ? Math.min(...existingPositions) - photoFiles.length
-          : 0;
-        const upload = await uploadAndRegisterPhotos(
-          savedVehicleId,
-          photoFiles,
-          primaryPhotoIndex,
-          startPosition,
-        );
-        if (upload.errors.length > 0) {
-          toast.warning(`${upload.registered} fotos guardadas. ${upload.errors.length} no pudieron subirse.`);
-        } else {
-          toast.success(`${upload.registered} ${upload.registered === 1 ? "foto guardada" : "fotos guardadas"}`);
-        }
+      if (savedVehicleId) {
+        await savePhotos(savedVehicleId);
       }
       const stockNumber = Number(data?.vehicle?.stock_number);
       const stockCode = Number.isInteger(stockNumber) && stockNumber > 0
@@ -491,6 +479,47 @@ export function DealershipVehicleForm({
       if (message) toast.error(message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  /** Aplica la lista de fotos: quita las eliminadas, sube las nuevas y guarda el orden final. */
+  const savePhotos = async (vehicleId: string) => {
+    const keptIds = new Set(photoItems.flatMap((item) => (item.kind === "saved" ? [item.id] : [])));
+    const removed = savedPhotos.filter((photo) => !keptIds.has(photo.id));
+    const newItems = photoItems.filter((item): item is Extract<PhotoItem, { kind: "new" }> => item.kind === "new");
+    const reordered = photoItems.some((item, index) => item.kind !== "saved" || savedPhotos[index]?.id !== item.id);
+    if (!removed.length && !newItems.length && !reordered) return;
+
+    let failedRemovals = 0;
+    for (const photo of removed) {
+      if (!(await deleteVehiclePhoto(vehicleId, photo.id))) failedRemovals += 1;
+    }
+
+    const uploadedIds = new Map<string, string>();
+    let uploadErrors: string[] = [];
+    if (newItems.length) {
+      toast.message(`Subiendo ${newItems.length} ${newItems.length === 1 ? "foto" : "fotos"}...`);
+      // Posición provisoria al final; el orden real se fija después con saveVehiclePhotoOrder.
+      const upload = await uploadAndRegisterPhotos(vehicleId, newItems.map((item) => item.file), 1000);
+      upload.ids.forEach((id, index) => { if (id) uploadedIds.set(newItems[index].key, id); });
+      uploadErrors = upload.errors;
+    }
+
+    const finalIds = photoItems.flatMap((item) => {
+      if (item.kind === "saved") return [item.id];
+      const id = uploadedIds.get(item.key);
+      return id ? [id] : [];
+    });
+    const orderError = finalIds.length ? await saveVehiclePhotoOrder(vehicleId, finalIds) : null;
+
+    if (uploadErrors.length || failedRemovals || orderError) {
+      toast.warning([
+        uploadErrors.length ? `${uploadErrors.length} fotos no pudieron subirse.` : "",
+        failedRemovals ? `${failedRemovals} fotos no se pudieron quitar.` : "",
+        orderError ?? "",
+      ].filter(Boolean).join(" "));
+    } else {
+      toast.success("Fotos guardadas en el orden elegido");
     }
   };
 
@@ -619,15 +648,7 @@ export function DealershipVehicleForm({
 
           {activeTab === "vehicle" && <Panel title="Fotos del vehículo">
             <div className="p-4">
-              <VehiclePhotoUpload
-                files={photoFiles}
-                primaryIndex={primaryPhotoIndex}
-                existingUrls={vehicle?.photos.map((photo) => photo.url) ?? []}
-                onChange={(files, primaryIndex) => {
-                  setPhotoFiles(files);
-                  setPrimaryPhotoIndex(primaryIndex);
-                }}
-              />
+              <VehiclePhotoUpload items={photoItems} onChange={setPhotoItems} />
             </div>
           </Panel>}
 

@@ -94,6 +94,9 @@ Producción corre en el VPS como imagen `finmotor-frontend-crm:prod` (puerto `30
 
 ## Registro de cambios
 
+### Próxima versión (sin publicar)
+- **Orden de fotos al publicar o editar un vehículo:** todas las fotos (guardadas y nuevas) en una sola lista que se ordena arrastrando o con flechas; la primera es la portada y la estrella lleva una foto al primer lugar. Se pueden quitar fotos guardadas. Las fotos nuevas se ordenan por nombre de archivo al seleccionarlas, para respetar la secuencia de la cámara.
+
 ### 2026-11-08 — Puja en un clic y Azure Blob
 - **Marketplace de proveedores:** las unidades vuelven a aparecer. El backend abre la subasta a las unidades publicadas antes de las subastas (migración `0088`).
 - **Puja en un clic** en la tarjeta y en la ficha, con atajos de incremento, cuenta regresiva, "vas ganando / te superaron" y 3 segundos para cancelar. La ficha conserva "Pujar otro monto".
